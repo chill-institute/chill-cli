@@ -65,7 +65,7 @@ mise run test:integration
 
 ## Development Notes
 
-- `chilly` is the command-line client for `chill.institute`.
+- `chilly` is the command-line client for `chill.institute`
 - Prefer explicit, scriptable CLI behavior.
 - Keep human output and machine-readable output both in mind.
 - Keep `skills/chilly-cli/` in sync when install flows, auth behavior, schema output, or command surfaces change.
@@ -83,10 +83,10 @@ Normal CLI change flow:
 1. Make the change.
 2. Run `mise run verify`
 3. Open or update a pull request. GitHub Actions runs `Verify` on pull requests.
-4. Merge to `main`. GitHub Actions runs `Main`, which re-verifies the repo, runs `semantic-release`, creates the next `vX.Y.Z` tag from conventional commits, and then runs GoReleaser to publish release archives, create the GitHub release, update the Homebrew tap, and publish npm packages under `@chill-institute/cli`.
+4. Merge to `main`, where GitHub Actions runs `Main`, re-verifies the repo, runs `semantic-release`, creates the next `vX.Y.Z` tag from conventional commits, and then runs GoReleaser to publish release archives, create the GitHub release, update the Homebrew tap, and publish npm packages under `@chill-institute/cli`
 5. The existing tag-based `Release` workflow remains available as a fallback for intentionally pushed tags. npm trusted publishing is configured for the normal `Main` workflow only.
 
-The npm package name is `@chill-institute/cli`; its installed binary remains `chilly`. npm Trusted Publishing requires each package to exist before trust can be configured, so package bootstrap is an operator setup step.
+The npm package name is `@chill-institute/cli`; its installed binary remains `chilly`, and npm Trusted Publishing requires each package to exist before trust can be configured, so package bootstrap is an operator setup step.
 
 Versioning notes:
 

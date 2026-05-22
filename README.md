@@ -4,26 +4,65 @@
 
 CLI client for [chill.institute](https://chill.institute), your favorite [put.io](https://put.io) extension since 2018.
 
+The installed command is `chilly`, built for both humans and agents: interactive terminal output for normal use, JSON/NDJSON contracts for scripts, and dry-run support before mutations.
+
 ## Install
+
+Homebrew:
 
 ```bash
 brew install chill-institute/tap/chilly
 chilly version
 ```
 
+npm:
+
 ```bash
 npm install -g @chill-institute/cli
 chilly version
 ```
+
+Install script:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/chill-institute/chill-cli/main/scripts/install.sh | bash
 chilly version
 ```
 
-## Quickstart
+## Quick Start
 
-### Prompt for Agents
+```bash
+chilly auth login
+chilly doctor --output json
+chilly whoami --output json
+chilly search --query "dune"
+```
+
+The default login flow opens the hosted web token page and waits for the setup token to be pasted back into the terminal. If you already have a setup token:
+
+```bash
+chilly auth login --token <token>
+```
+
+## Scriptable Usage
+
+Prefer explicit output formats and narrow fields when another program will read the result:
+
+```bash
+chilly search --query "dune" --fields results.title,results.release_info.bit_depth --output ndjson
+chilly version --fields version --output json
+chilly add-transfer --url "magnet:?xt=urn:btih:..." --dry-run --output json
+printf '{"url":"magnet:?xt=urn:btih:..."}' | chilly add-transfer --json @- --dry-run --output json
+printf '{"key":"api-base-url","value":"https://api.chill.institute"}' | chilly settings set --json @- --dry-run --output json
+chilly schema command search --fields id,linked_procedure --output json
+chilly schema type chill.v4.ReleaseInfo --fields fields.name,fields.json_name --output json
+```
+
+When `stdout` is not a TTY, `chilly` defaults to compact JSON for command results unless `--output` is set explicitly.
+
+## Agent Prompt
+
+Use this prompt when handing the CLI to an agent:
 
 ```text
 Use `chilly` to interact with chill.institute from the terminal
@@ -56,34 +95,23 @@ After setup, continue with the requested task instead of stopping after install 
 
 Treat the agent as an untrusted operator: prefer `--output json`, parse only `stdout`, use `--fields` to narrow reads, and use `--dry-run` before mutations.
 
-### Commands for Humans
+## Develop
 
 ```bash
-chilly auth login
-chilly doctor --output json
-chilly whoami --output json
-chilly search --query "dune"
-chilly search --query "dune" --fields results.title,results.release_info.bit_depth --output ndjson
-chilly version --fields version --output json
-chilly add-transfer --url "magnet:?xt=urn:btih:..." --dry-run --output json
-printf '{"url":"magnet:?xt=urn:btih:..."}' | chilly add-transfer --json @- --dry-run --output json
-printf '{"token":"token-from-setup","skip_verify":true}' | chilly auth login --json @- --dry-run --output json
-printf '{"key":"api-base-url","value":"https://api.chill.institute"}' | chilly settings set --json @- --dry-run --output json
-chilly schema command search --fields id,linked_procedure --output json
-chilly schema type chill.v4.ReleaseInfo --fields fields.name,fields.json_name --output json
-chilly self-update --json '{"check":true}' --output json
-mise run contracts:check
+mise install
+mise run hooks
+go build ./cmd/chilly
+go run ./cmd/chilly version --output json
+mise run verify
 ```
 
-Released binaries use the `default` profile; dev builds default to `dev` so source runs do not reuse production config by accident.
-
-When `stdout` is not a TTY, `chilly` now defaults to compact JSON for command results unless `--output` is set explicitly. That keeps piped and agent-driven runs machine-readable without changing the interactive terminal summaries humans see by default.
+Released binaries use the `default` profile. Dev builds default to `dev` so source runs do not reuse production config by accident.
 
 ## Docs
 
-- [Architecture](./docs/ARCHITECTURE.md)
-- [Security](./SECURITY.md)
-- [Contributing](./CONTRIBUTING.md)
+- [Architecture](./docs/ARCHITECTURE.md): command shape, transport, config, skills, and release flow
+- [Security](./SECURITY.md): local credential and network safety notes
+- [Contributing](./CONTRIBUTING.md): setup, validation, and release workflow
 
 ## Contributing
 
