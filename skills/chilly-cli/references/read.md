@@ -24,7 +24,8 @@ Use this reference for read-only workflows against the hosted API.
 
 - Authenticated profile: `chilly whoami --fields username,email --output json`
 - Movies: `chilly movies --fields movies.title --output json`
-- TV shows: `chilly tv-shows --fields shows.title --output json`
+- TV shows, all providers: `chilly tv-shows --source all-providers --fields source,shows.title --output json`
+- TV shows, one provider: `chilly tv-shows --source hulu --fields source,shows.title --output json`
 - TV show detail: `chilly tv-shows detail tt0944947 --fields show.title,seasons.seasonNumber --output json`
 - TV show season: `chilly tv-shows season tt0944947 1 --fields season.name,episodes.name --output json`
 - TV season downloads: `chilly tv-shows season-downloads tt0944947 1 --fields seasonPack.title,episodes.download.title --output json`
@@ -32,6 +33,12 @@ Use this reference for read-only workflows against the hosted API.
 - Hosted user settings: `chilly user settings get --fields search.sortBy,catalog.moviesSource,download.folderId --output json`
 - Current download folder: `chilly user download-folder --fields folder.id,folder.name --output json`
 - Folder tree slice: `chilly user folder get 0 --fields parent.name,files.name --output json`
+
+## TV Sources
+
+- Use `--source` for TV catalog reads. Do not patch `catalog.tvShowsSource` just to browse a provider.
+- Supported source names: `all-providers`, `netflix`, `hbo-max`, `apple-tv-plus`, `prime-video`, `disney-plus`, `hulu`, `paramount-plus`, `amc-plus`, `peacock`.
+- The CLI sends protobuf JSON enum strings such as `TV_SHOWS_SOURCE_HULU`; parse the response `source` field to confirm which source the API returned.
 
 ## Environment Reads
 

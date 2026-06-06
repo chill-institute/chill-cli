@@ -1043,6 +1043,84 @@ func TestTVShowsUsesStoredToken(t *testing.T) {
 	}
 }
 
+func TestTVShowsSourceSendsRequestOverride(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if request.URL.Path != "/v4/chill.v4.UserService/GetTVShows" {
+			t.Fatalf("path = %q", request.URL.Path)
+		}
+		var payload map[string]any
+		if err := json.NewDecoder(request.Body).Decode(&payload); err != nil {
+			t.Fatalf("decode payload: %v", err)
+		}
+		if payload["source"] != "TV_SHOWS_SOURCE_AMC_PLUS" {
+			t.Fatalf("payload = %#v, want AMC+ source", payload)
+		}
+		_, _ = writer.Write([]byte(`{"source":"TV_SHOWS_SOURCE_AMC_PLUS","shows":[{"title":"Dark Winds","imdbId":"tt15017118"}]}`))
+	}))
+	defer server.Close()
+
+	configPath := filepath.Join(t.TempDir(), "config.json")
+	store, err := config.NewStore(configPath)
+	if err != nil {
+		t.Fatalf("NewStore() error = %v", err)
+	}
+	if err := store.Save(config.Config{APIBaseURL: server.URL, AuthToken: "saved-token"}); err != nil {
+		t.Fatalf("Save() error = %v", err)
+	}
+
+	stdout := &bytes.Buffer{}
+	command := newTVShowsCommand(&appContext{
+		opts:   &appOptions{configPath: configPath, output: outputJSON},
+		stdin:  strings.NewReader(""),
+		stdout: stdout,
+		stderr: &bytes.Buffer{},
+	})
+	command.SetArgs([]string{"--source", "amc-plus", "--fields", "source,shows.title"})
+	if err := command.Execute(); err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+
+	if !strings.Contains(stdout.String(), `"source":"TV_SHOWS_SOURCE_AMC_PLUS"`) ||
+		!strings.Contains(stdout.String(), `"title":"Dark Winds"`) {
+		t.Fatalf("stdout = %q", stdout.String())
+	}
+}
+
+func TestTVShowsSourceRejectsUnsafeValueBeforeNetwork(t *testing.T) {
+	t.Parallel()
+
+	called := false
+	server := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		called = true
+	}))
+	defer server.Close()
+
+	configPath := filepath.Join(t.TempDir(), "config.json")
+	store, err := config.NewStore(configPath)
+	if err != nil {
+		t.Fatalf("NewStore() error = %v", err)
+	}
+	if err := store.Save(config.Config{APIBaseURL: server.URL, AuthToken: "saved-token"}); err != nil {
+		t.Fatalf("Save() error = %v", err)
+	}
+
+	command := newTVShowsCommand(&appContext{
+		opts:   &appOptions{configPath: configPath, output: outputJSON},
+		stdin:  strings.NewReader(""),
+		stdout: &bytes.Buffer{},
+		stderr: &bytes.Buffer{},
+	})
+	command.SetArgs([]string{"--source", "hulu?source=netflix"})
+	if err := command.Execute(); err == nil {
+		t.Fatal("Execute() error = nil, want invalid source")
+	}
+	if called {
+		t.Fatal("server was called for invalid source")
+	}
+}
+
 func TestTVShowDetailUsesIMDbID(t *testing.T) {
 	t.Parallel()
 
