@@ -183,12 +183,13 @@ var commandSchemaRegistry = map[string]schemaEntry{
 	"tv-shows": {
 		ID:              "tv-shows",
 		Kind:            "command",
-		Summary:         "List TV shows using your profile settings",
+		Summary:         "List TV shows from a TV provider source",
 		AuthMode:        string(rpcAuthUser),
 		SupportsFields:  true,
 		LinkedProcedure: procedureUserGetTVShows,
 		Output:          schemaOutput{JSON: true, Human: true, Type: "chill.v4.GetTVShowsResponse"},
 		Inputs: appendInputs(
+			schemaInput{Name: "source", Type: "string", Description: tvShowsSourceFlagDescription},
 			schemaInput{Name: "fields", Type: "string", Description: "comma-separated field paths to include in the output"},
 		),
 	},
@@ -544,13 +545,14 @@ var commandSchemaRegistry = map[string]schemaEntry{
 	"user tv-shows": {
 		ID:              "user tv-shows",
 		Kind:            "command",
-		Summary:         "List TV shows using your profile settings",
+		Summary:         "List TV shows from a TV provider source",
 		AliasFor:        "tv-shows",
 		AuthMode:        string(rpcAuthUser),
 		SupportsFields:  true,
 		LinkedProcedure: procedureUserGetTVShows,
 		Output:          schemaOutput{JSON: true, Human: true, Type: "chill.v4.GetTVShowsResponse"},
 		Inputs: appendInputs(
+			schemaInput{Name: "source", Type: "string", Description: tvShowsSourceFlagDescription},
 			schemaInput{Name: "fields", Type: "string", Description: "comma-separated field paths to include in the output"},
 		),
 	},
@@ -738,6 +740,9 @@ var procedureSchemaRegistry = map[string]schemaEntry{
 		Summary:  "List TV shows for the current user",
 		AuthMode: string(rpcAuthUser),
 		Output:   schemaOutput{JSON: true, Type: "chill.v4.GetTVShowsResponse"},
+		Inputs: []schemaInput{
+			{Name: "source", Type: "string", Description: "optional TVShowsSource enum override; unspecified uses TV_SHOWS_SOURCE_ALL_PROVIDERS"},
+		},
 	},
 	procedureUserGetTVShowDetail: {
 		ID:       procedureUserGetTVShowDetail,

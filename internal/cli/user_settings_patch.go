@@ -113,18 +113,8 @@ var userSettingsPatchSpecs = []userSettingsPatchSpec{
 		aliases:     []string{"tv-shows-source", "catalog.tv-shows-source"},
 		path:        []string{"catalog", "tvShowsSource"},
 		valueType:   "enum",
-		description: "one of: netflix, hbo-max, apple-tv-plus, prime-video, disney-plus",
-		normalize: normalizeEnumValue(map[string]string{
-			"netflix":       "TV_SHOWS_SOURCE_NETFLIX",
-			"hbo-max":       "TV_SHOWS_SOURCE_HBO_MAX",
-			"hbo_max":       "TV_SHOWS_SOURCE_HBO_MAX",
-			"apple-tv-plus": "TV_SHOWS_SOURCE_APPLE_TV_PLUS",
-			"apple_tv_plus": "TV_SHOWS_SOURCE_APPLE_TV_PLUS",
-			"prime-video":   "TV_SHOWS_SOURCE_PRIME_VIDEO",
-			"prime_video":   "TV_SHOWS_SOURCE_PRIME_VIDEO",
-			"disney-plus":   "TV_SHOWS_SOURCE_DISNEY_PLUS",
-			"disney_plus":   "TV_SHOWS_SOURCE_DISNEY_PLUS",
-		}),
+		description: "one of: all-providers, netflix, hbo-max, apple-tv-plus, prime-video, disney-plus, hulu, paramount-plus, amc-plus, peacock",
+		normalize:   normalizeTVShowsSourcePatchValue,
 	},
 }
 

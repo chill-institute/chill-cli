@@ -177,6 +177,17 @@ func TestSchemaCommandUserIndexersReturnsFieldMetadata(t *testing.T) {
 	}
 }
 
+func TestSchemaCommandTVShowsReturnsSourceMetadata(t *testing.T) {
+	t.Parallel()
+
+	output := commandSchemaForTest(t, "tv-shows")
+
+	if output.LinkedProcedure != procedureUserGetTVShows {
+		t.Fatalf("LinkedProcedure = %q, want %q", output.LinkedProcedure, procedureUserGetTVShows)
+	}
+	assertInputNotUnconditionallyRequired(t, output, "source")
+}
+
 func TestSchemaCommandAddTransferReturnsInputModes(t *testing.T) {
 	t.Parallel()
 
@@ -358,6 +369,28 @@ func TestSchemaProcedureSearchReturnsMetadata(t *testing.T) {
 	if output.Output.Type != typeSearchResponse {
 		t.Fatalf("Output.Type = %q, want %q", output.Output.Type, typeSearchResponse)
 	}
+}
+
+func TestSchemaProcedureTVShowsReturnsSourceInput(t *testing.T) {
+	t.Parallel()
+
+	stdout := &bytes.Buffer{}
+	command := newRootCommand(&appContext{
+		opts:   &appOptions{output: outputJSON},
+		stdin:  strings.NewReader(""),
+		stdout: stdout,
+		stderr: &bytes.Buffer{},
+	})
+	command.SetArgs([]string{"schema", "procedure", procedureUserGetTVShows, "--output", "json"})
+	if err := command.Execute(); err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+
+	var output schemaEntry
+	if err := json.Unmarshal(stdout.Bytes(), &output); err != nil {
+		t.Fatalf("json.Unmarshal() error = %v", err)
+	}
+	assertInputNotUnconditionallyRequired(t, output, "source")
 }
 
 func TestSchemaTypeReleaseInfoReturnsJSONNames(t *testing.T) {

@@ -11,14 +11,18 @@ import (
 	"github.com/spf13/cobra"
 )
 
+const tvShowsSourceFlagDescription = "TV source override: all-providers, netflix, hbo-max, apple-tv-plus, prime-video, disney-plus, hulu, paramount-plus, amc-plus, or peacock"
+
 func newTVShowsCommand(app *appContext) *cobra.Command {
 	return newTVShowsReadCommand(
 		app,
 		"tv-shows",
-		"List TV shows using your profile settings",
+		"List TV shows from a TV provider source",
 		"",
 		strings.TrimSpace(`
 chilly tv-shows
+chilly tv-shows --source all-providers --fields source,shows.title --output json
+chilly tv-shows --source hulu --output ndjson
 chilly tv-shows --fields shows.title --output json
 chilly tv-shows detail tt0944947
 chilly tv-shows season tt0944947 1
@@ -31,10 +35,11 @@ func newUserTVShowsCommand(app *appContext) *cobra.Command {
 	return newTVShowsReadCommand(
 		app,
 		"tv-shows",
-		"List TV shows using your profile settings",
+		"List TV shows from a TV provider source",
 		"Alias for the top-level tv-shows command.",
 		strings.TrimSpace(`
 chilly user tv-shows
+chilly user tv-shows --source peacock --fields shows.title --output json
 chilly user tv-shows detail tt0944947
 chilly user tv-shows season-downloads tt0944947 1 --output json
 `),
@@ -43,6 +48,7 @@ chilly user tv-shows season-downloads tt0944947 1 --output json
 
 func newTVShowsReadCommand(app *appContext, use, short, long, example string) *cobra.Command {
 	var fields string
+	var source string
 
 	command := &cobra.Command{
 		Use:     use,
@@ -50,11 +56,17 @@ func newTVShowsReadCommand(app *appContext, use, short, long, example string) *c
 		Long:    long,
 		Example: example,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runTVShows(app, fields)
+			return runTVShows(app, fields, source)
 		},
 	}
 
 	command.Flags().StringVar(&fields, "fields", "", "comma-separated field paths to include in the output")
+	command.Flags().StringVar(
+		&source,
+		"source",
+		"",
+		tvShowsSourceFlagDescription,
+	)
 	command.AddCommand(newTVShowDetailCommand(app))
 	command.AddCommand(newTVShowSeasonCommand(app))
 	command.AddCommand(newTVShowEpisodeDownloadCommand(app))
@@ -224,8 +236,12 @@ chilly tv-shows season-downloads tt0944947 1 --fields seasonPack.title,episodes.
 	return command
 }
 
-func runTVShows(app *appContext, fields string) error {
+func runTVShows(app *appContext, fields string, source string) error {
 	selection, err := parseFieldSelection(fields)
+	if err != nil {
+		return err
+	}
+	normalizedSource, err := normalizeTVShowsSource(source)
 	if err != nil {
 		return err
 	}
@@ -243,7 +259,7 @@ func runTVShows(app *appContext, fields string) error {
 		context.Background(),
 		cfg,
 		procedureUserGetTVShows,
-		map[string]any{},
+		tvShowsRequestBody(normalizedSource),
 		rpc.AuthUser,
 		token,
 	)
@@ -251,6 +267,79 @@ func runTVShows(app *appContext, fields string) error {
 		return fmt.Errorf("list tv shows: %w", err)
 	}
 	return app.writeSelectedResponseBodyWithRenderer(response.Body, selection, renderTVShowsPretty)
+}
+
+func tvShowsRequestBody(source string) map[string]any {
+	if source == "" {
+		return map[string]any{}
+	}
+	return map[string]any{"source": source}
+}
+
+func normalizeTVShowsSource(raw string) (string, error) {
+	return normalizeTVShowsSourceValue(raw, true)
+}
+
+func normalizeTVShowsSourcePatchValue(raw string) (any, error) {
+	return normalizeTVShowsSourceValue(raw, false)
+}
+
+func normalizeTVShowsSourceValue(raw string, allowEmpty bool) (string, error) {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		if allowEmpty {
+			return "", nil
+		}
+		return "", usageError("invalid_tv_shows_source", "TV shows source is required")
+	}
+	if strings.IndexFunc(trimmed, unicode.IsControl) >= 0 {
+		return "", usageError("invalid_tv_shows_source", "TV shows source must not contain control characters")
+	}
+	if strings.Contains(trimmed, "..") || strings.Contains(trimmed, "%") || strings.ContainsAny(trimmed, "/?#") {
+		return "", usageError("invalid_tv_shows_source", "TV shows source must be one of the documented source names")
+	}
+
+	switch strings.ToUpper(trimmed) {
+	case "TV_SHOWS_SOURCE_ALL_PROVIDERS",
+		"TV_SHOWS_SOURCE_NETFLIX",
+		"TV_SHOWS_SOURCE_HBO_MAX",
+		"TV_SHOWS_SOURCE_APPLE_TV_PLUS",
+		"TV_SHOWS_SOURCE_PRIME_VIDEO",
+		"TV_SHOWS_SOURCE_DISNEY_PLUS",
+		"TV_SHOWS_SOURCE_HULU",
+		"TV_SHOWS_SOURCE_PARAMOUNT_PLUS",
+		"TV_SHOWS_SOURCE_AMC_PLUS",
+		"TV_SHOWS_SOURCE_PEACOCK":
+		return strings.ToUpper(trimmed), nil
+	}
+
+	normalized := strings.ToLower(trimmed)
+	normalized = strings.ReplaceAll(normalized, "_", "-")
+	normalized = strings.ReplaceAll(normalized, " ", "-")
+	switch normalized {
+	case "all", "all-providers", "all-provider", "providers":
+		return "TV_SHOWS_SOURCE_ALL_PROVIDERS", nil
+	case "netflix":
+		return "TV_SHOWS_SOURCE_NETFLIX", nil
+	case "hbo-max", "hbomax":
+		return "TV_SHOWS_SOURCE_HBO_MAX", nil
+	case "apple-tv-plus", "apple-tv", "appletv-plus", "appletv":
+		return "TV_SHOWS_SOURCE_APPLE_TV_PLUS", nil
+	case "prime-video", "prime", "amazon-prime", "amazon-prime-video":
+		return "TV_SHOWS_SOURCE_PRIME_VIDEO", nil
+	case "disney-plus", "disney":
+		return "TV_SHOWS_SOURCE_DISNEY_PLUS", nil
+	case "hulu":
+		return "TV_SHOWS_SOURCE_HULU", nil
+	case "paramount-plus", "paramount":
+		return "TV_SHOWS_SOURCE_PARAMOUNT_PLUS", nil
+	case "amc-plus", "amc":
+		return "TV_SHOWS_SOURCE_AMC_PLUS", nil
+	case "peacock":
+		return "TV_SHOWS_SOURCE_PEACOCK", nil
+	default:
+		return "", usageError("invalid_tv_shows_source", "unknown TV shows source %q", raw)
+	}
 }
 
 func normalizeIMDbID(raw string) (string, error) {

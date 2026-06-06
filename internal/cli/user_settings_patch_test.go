@@ -23,6 +23,15 @@ func TestNormalizeUserSettingsPatch(t *testing.T) {
 		t.Fatalf("enumPatch = %#v", enumPatch)
 	}
 
+	tvSourcePatch, err := normalizeUserSettingsPatch("tv-shows-source", "paramount-plus")
+	if err != nil {
+		t.Fatalf("normalizeUserSettingsPatch(tv source) error = %v", err)
+	}
+	if tvSourcePatch.Field != "catalog.tvShowsSource" ||
+		tvSourcePatch.Value != "TV_SHOWS_SOURCE_PARAMOUNT_PLUS" {
+		t.Fatalf("tvSourcePatch = %#v", tvSourcePatch)
+	}
+
 	downloadPatch, err := normalizeUserSettingsPatch("download.folderId", "42")
 	if err != nil {
 		t.Fatalf("normalizeUserSettingsPatch(download) error = %v", err)
