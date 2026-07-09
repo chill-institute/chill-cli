@@ -371,6 +371,40 @@ func TestSchemaProcedureSearchReturnsMetadata(t *testing.T) {
 	}
 }
 
+func TestSchemaTypeSearchResponseReturnsIndexerStats(t *testing.T) {
+	t.Parallel()
+
+	stdout := &bytes.Buffer{}
+	command := newRootCommand(&appContext{
+		opts:   &appOptions{output: outputJSON},
+		stdin:  strings.NewReader(""),
+		stdout: stdout,
+		stderr: &bytes.Buffer{},
+	})
+	command.SetArgs([]string{"schema", "type", typeSearchResponse, "--output", "json"})
+	if err := command.Execute(); err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+
+	var output schemaType
+	if err := json.Unmarshal(stdout.Bytes(), &output); err != nil {
+		t.Fatalf("json.Unmarshal() error = %v", err)
+	}
+
+	for _, field := range output.Fields {
+		if field.Name == "indexer_stats" {
+			if field.Type != typeIndexerStat {
+				t.Fatalf("indexer_stats type = %q, want %q", field.Type, typeIndexerStat)
+			}
+			if !field.Repeated {
+				t.Fatal("indexer_stats should be repeated")
+			}
+			return
+		}
+	}
+	t.Fatalf("fields = %#v, want indexer_stats", output.Fields)
+}
+
 func TestSchemaProcedureTVShowsReturnsSourceInput(t *testing.T) {
 	t.Parallel()
 

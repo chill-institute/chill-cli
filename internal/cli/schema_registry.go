@@ -59,6 +59,7 @@ type schemaType struct {
 const (
 	typeSearchResponse = "chill.v4.SearchResponse"
 	typeSearchResult   = "chill.v4.SearchResult"
+	typeIndexerStat    = "chill.v4.IndexerStat"
 	typeReleaseInfo    = "chill.v4.ReleaseInfo"
 )
 
@@ -1219,6 +1220,19 @@ var typeSchemaRegistry = map[string]schemaType{
 		Fields: []schemaField{
 			schemaFieldFor("query", "string"),
 			repeatedSchemaField("results", typeSearchResult),
+			repeatedSchemaField("indexer_stats", typeIndexerStat),
+		},
+	},
+	typeIndexerStat: {
+		ID:      typeIndexerStat,
+		Kind:    "type",
+		Summary: "Per-indexer search execution metadata",
+		Fields: []schemaField{
+			schemaFieldFor("id", "string"),
+			schemaFieldFor("name", "string"),
+			schemaFieldFor("elapsed_ms", "integer"),
+			schemaFieldFor("result_count", "integer"),
+			schemaFieldFor("error", "string"),
 		},
 	},
 	typeSearchResult: {
