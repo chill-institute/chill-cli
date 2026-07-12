@@ -160,7 +160,6 @@ func TestWebAuthTokenURLDerivesPublicHostFromAPIBaseURL(t *testing.T) {
 		{name: "production web host", input: "https://chill.institute", output: "https://chill.institute/auth/cli-token"},
 		{name: "staging web host", input: "https://staging.chill.institute", output: "https://staging.chill.institute/auth/cli-token"},
 		{name: "localhost", input: "http://localhost:8080", output: "http://localhost:8080/auth/cli-token"},
-		{name: "localhost api host", input: "http://api.localhost:3000", output: "http://localhost:3000/auth/cli-token"},
 		{name: "dev api host with port", input: "https://api.chill.test:4443", output: "https://chill.test:4443/auth/cli-token"},
 		{name: "dev web host with port", input: "https://chill.test:4443", output: "https://chill.test:4443/auth/cli-token"},
 	}
@@ -224,7 +223,7 @@ func TestAuthLoginDryRunOutputsWebTokenLoginURL(t *testing.T) {
 func TestWebAuthTokenURLRejectsInvalidInput(t *testing.T) {
 	t.Parallel()
 
-	for _, input := range []string{"", "api.chill.institute", "ftp://api.chill.institute", "https://api.chill.institute/path"} {
+	for _, input := range []string{"", "api.chill.institute", "ftp://api.chill.institute", "http://api.localhost:3000", "https://api.chill.institute/path"} {
 		input := input
 		t.Run(input, func(t *testing.T) {
 			t.Parallel()

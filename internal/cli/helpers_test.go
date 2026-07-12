@@ -241,7 +241,6 @@ func TestSettingsValidationHelpers(t *testing.T) {
 		"https://api.chill.institute/": "https://api.chill.institute",
 		"https://api.example.test":     "https://api.example.test",
 		"http://localhost:8080":        "http://localhost:8080",
-		"http://api.localhost:3000":    "http://api.localhost:3000",
 		"http://127.0.0.1:8080":        "http://127.0.0.1:8080",
 		"http://[::1]:8080":            "http://[::1]:8080",
 	}
@@ -261,6 +260,7 @@ func TestSettingsValidationHelpers(t *testing.T) {
 		"https://api.chill.institute/path",
 		"https://user@api.chill.institute",
 		"http://example.test",
+		"http://api.localhost:3000",
 		"http://localhost.example.test",
 		"http://notlocalhost",
 	}

@@ -291,7 +291,7 @@ func normalizeAPIBaseURL(raw string) (string, error) {
 
 func isLoopbackHost(raw string) bool {
 	host := strings.ToLower(strings.TrimSpace(raw))
-	if host == "localhost" || strings.HasSuffix(host, ".localhost") {
+	if host == "localhost" {
 		return true
 	}
 	ip := net.ParseIP(host)
