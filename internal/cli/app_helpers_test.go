@@ -97,6 +97,46 @@ func TestLoadConfigRejectsUnsafeAPIOverride(t *testing.T) {
 	}
 }
 
+func TestLoadConfigRejectsUnsafeStoredAPIURL(t *testing.T) {
+	t.Parallel()
+
+	configPath := filepath.Join(t.TempDir(), "config.json")
+	store, err := config.NewStore(configPath)
+	if err != nil {
+		t.Fatalf("NewStore() error = %v", err)
+	}
+	if err := store.Save(config.Config{APIBaseURL: "http://example.test", AuthToken: "test-token"}); err != nil {
+		t.Fatalf("Save() error = %v", err)
+	}
+
+	app := &appContext{opts: &appOptions{configPath: configPath, output: outputJSON}}
+	if _, err := app.loadConfig(); err == nil || !strings.Contains(err.Error(), "must use https") {
+		t.Fatalf("loadConfig() error = %v, want https error", err)
+	}
+}
+
+func TestLoadConfigAllowsStoredLoopbackHTTPURL(t *testing.T) {
+	t.Parallel()
+
+	configPath := filepath.Join(t.TempDir(), "config.json")
+	store, err := config.NewStore(configPath)
+	if err != nil {
+		t.Fatalf("NewStore() error = %v", err)
+	}
+	if err := store.Save(config.Config{APIBaseURL: "http://127.0.0.1:8080"}); err != nil {
+		t.Fatalf("Save() error = %v", err)
+	}
+
+	app := &appContext{opts: &appOptions{configPath: configPath, output: outputJSON}}
+	cfg, err := app.loadConfig()
+	if err != nil {
+		t.Fatalf("loadConfig() error = %v", err)
+	}
+	if cfg.APIBaseURL != "http://127.0.0.1:8080" {
+		t.Fatalf("APIBaseURL = %q", cfg.APIBaseURL)
+	}
+}
+
 func TestReadLinePropagatesPromptWriteError(t *testing.T) {
 	t.Parallel()
 

@@ -25,6 +25,7 @@ Useful reports include issues involving:
 `chilly` is designed with the assumption that the agent is not a trusted operator.
 
 - opaque IDs, base URLs, and procedure names should be validated locally before use
+- API endpoints must use HTTPS except for explicit loopback development hosts
 - machine-readable output belongs on `stdout`; prompts, warnings, and recovery hints belong on `stderr`
 - mutating commands should offer preview paths such as `--dry-run`
 - request bodies should prefer explicit JSON contracts over heuristic shell parsing when possible

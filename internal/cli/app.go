@@ -135,14 +135,16 @@ func (app *appContext) loadConfig() (config.Config, error) {
 	if err != nil {
 		return config.Config{}, wrapInternalError("config_load_failed", "load config", err)
 	}
+	cfg = cfg.Normalized()
 	if override := strings.TrimSpace(app.opts.apiURL); override != "" {
-		normalizedOverride, err := normalizeAPIBaseURL(override)
-		if err != nil {
-			return config.Config{}, err
-		}
-		cfg.APIBaseURL = normalizedOverride
+		cfg.APIBaseURL = override
 	}
-	return cfg.Normalized(), nil
+	normalizedAPIURL, err := normalizeAPIBaseURL(cfg.APIBaseURL)
+	if err != nil {
+		return config.Config{}, err
+	}
+	cfg.APIBaseURL = normalizedAPIURL
+	return cfg, nil
 }
 
 func (app *appContext) saveConfig(cfg config.Config) error {
