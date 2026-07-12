@@ -95,6 +95,38 @@ func TestCallRejectsRedirectThatChangesAPIOrigin(t *testing.T) {
 	}
 }
 
+func TestCallRejectsRedirectThatChangesAPIAuthority(t *testing.T) {
+	t.Parallel()
+
+	redirected := make(chan struct{}, 1)
+	destination := httptest.NewTLSServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
+		redirected <- struct{}{}
+		writer.WriteHeader(http.StatusNoContent)
+	}))
+	defer destination.Close()
+
+	source := httptest.NewTLSServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
+		writer.Header().Set("Location", destination.URL+"/redirected")
+		writer.WriteHeader(http.StatusTemporaryRedirect)
+	}))
+	defer source.Close()
+
+	client := NewClient(source.URL, source.Client())
+	_, err := client.Call(context.Background(), CallRequest{
+		Procedure: "chill.v4.UserService/GetUserProfile",
+		AuthMode:  AuthUser,
+		AuthToken: "test-token",
+	})
+	if err == nil || !strings.Contains(err.Error(), "refusing redirect that changes API origin") {
+		t.Fatalf("Call() error = %v, want unsafe redirect rejection", err)
+	}
+	select {
+	case <-redirected:
+		t.Fatal("cross-authority redirect target received a request")
+	default:
+	}
+}
+
 func TestCallAllowsSameOriginRedirect(t *testing.T) {
 	t.Parallel()
 
