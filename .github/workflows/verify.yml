@@ -23,6 +23,14 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Check out API contracts
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          repository: chill-institute/chill-contracts
+          ref: main
+          path: .contracts/chill-contracts
+          persist-credentials: false
+
       - name: Set up mise
         uses: jdx/mise-action@e6a8b3978addb5a52f2b4cd9d91eafa7f0ab959d # v4.2.0
 
@@ -40,3 +48,8 @@ jobs:
 
       - name: Verify
         run: mise run verify
+
+      - name: Verify API contract parity
+        env:
+          CHILLY_CONTRACTS_PROTO: ${{ github.workspace }}/.contracts/chill-contracts/proto/chill/v4/api.proto
+        run: mise run contracts:check
