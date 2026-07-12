@@ -257,6 +257,19 @@ func TestAPIErrorErrorIncludesBodyWhenEnvelopeMissing(t *testing.T) {
 	}
 }
 
+func TestAPIErrorUnwrapsResponseReadFailure(t *testing.T) {
+	t.Parallel()
+
+	cause := errors.New("read failed")
+	err := APIError{StatusCode: http.StatusBadGateway, Err: cause}
+	if !errors.Is(err, cause) {
+		t.Fatalf("errors.Is(%v, cause) = false", err)
+	}
+	if got := err.Error(); got != "api error (502): read failed" {
+		t.Fatalf("Error() = %q", got)
+	}
+}
+
 func TestCallRejectsDangerousProcedureNames(t *testing.T) {
 	t.Parallel()
 
@@ -320,37 +333,85 @@ func TestReadResponseBodyEnforcesLimit(t *testing.T) {
 func TestCallAppliesStatusSpecificBodyLimits(t *testing.T) {
 	t.Parallel()
 
+	const payload = "between"
 	testCases := []struct {
-		name       string
-		statusCode int
+		name             string
+		statusCode       int
+		wantBody         string
+		wantBodyTooLarge bool
 	}{
-		{name: "success", statusCode: http.StatusOK},
-		{name: "error", statusCode: http.StatusBadGateway},
+		{name: "success uses response limit", statusCode: http.StatusOK, wantBody: payload},
+		{name: "error uses smaller error limit", statusCode: http.StatusBadGateway, wantBodyTooLarge: true},
 	}
 	for _, testCase := range testCases {
 		testCase := testCase
 		t.Run(testCase.name, func(t *testing.T) {
 			t.Parallel()
 			server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
+				writer.Header().Set("X-Request-Id", "req-limit")
 				writer.WriteHeader(testCase.statusCode)
-				_, _ = writer.Write([]byte("oversized"))
+				_, _ = writer.Write([]byte(payload))
 			}))
 			defer server.Close()
 
 			client := NewClient(server.URL, server.Client())
-			client.responseBodyLimit = 4
+			client.responseBodyLimit = 16
 			client.errorBodyLimit = 4
-			_, err := client.Call(context.Background(), CallRequest{
+			response, err := client.Call(context.Background(), CallRequest{
 				Procedure: "chill.v4.UserService/GetUserProfile",
 				AuthMode:  AuthNone,
 			})
+			if !testCase.wantBodyTooLarge {
+				if err != nil {
+					t.Fatalf("Call() error = %v", err)
+				}
+				if string(response.Body) != testCase.wantBody {
+					t.Fatalf("Body = %q, want %q", response.Body, testCase.wantBody)
+				}
+				return
+			}
 			if !errors.Is(err, errResponseBodyTooLarge) {
 				t.Fatalf("Call() error = %v, want body limit error", err)
 			}
-			if strings.Contains(err.Error(), "oversized") {
+			var apiErr APIError
+			if !errors.As(err, &apiErr) {
+				t.Fatalf("Call() error = %T, want APIError", err)
+			}
+			if apiErr.StatusCode != testCase.statusCode || apiErr.RequestID != "req-limit" {
+				t.Fatalf("APIError = %#v", apiErr)
+			}
+			if strings.Contains(err.Error(), payload) {
 				t.Fatalf("Call() error exposed response body: %v", err)
 			}
 		})
+	}
+}
+
+func TestCallPreservesErrorMetadataWhenBodyReadFails(t *testing.T) {
+	t.Parallel()
+
+	httpClient := &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+		return &http.Response{
+			StatusCode: http.StatusUnauthorized,
+			Header:     http.Header{"X-Request-Id": []string{"req-read"}},
+			Body:       io.NopCloser(failingReader{err: io.ErrUnexpectedEOF}),
+		}, nil
+	})}
+	client := NewClient("https://api.chill.institute", httpClient)
+
+	_, err := client.Call(context.Background(), CallRequest{
+		Procedure: "chill.v4.UserService/GetUserProfile",
+		AuthMode:  AuthNone,
+	})
+	if !errors.Is(err, io.ErrUnexpectedEOF) {
+		t.Fatalf("Call() error = %v, want reader failure", err)
+	}
+	var apiErr APIError
+	if !errors.As(err, &apiErr) {
+		t.Fatalf("Call() error = %T, want APIError", err)
+	}
+	if apiErr.StatusCode != http.StatusUnauthorized || apiErr.RequestID != "req-read" {
+		t.Fatalf("APIError = %#v", apiErr)
 	}
 }
 

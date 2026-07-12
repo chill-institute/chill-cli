@@ -59,13 +59,21 @@ type APIError struct {
 	Message    string
 	RequestID  string
 	Body       string
+	Err        error
 }
 
 func (err APIError) Error() string {
 	if err.Code != "" || err.Message != "" {
 		return fmt.Sprintf("api error (%d): %s: %s", err.StatusCode, err.Code, err.Message)
 	}
+	if err.Err != nil {
+		return fmt.Sprintf("api error (%d): %v", err.StatusCode, err.Err)
+	}
 	return fmt.Sprintf("api error (%d): %s", err.StatusCode, err.Body)
+}
+
+func (err APIError) Unwrap() error {
+	return err.Err
 }
 
 func NewClient(baseURL string, httpClient *http.Client) *Client {
@@ -162,16 +170,23 @@ func (client Client) Call(ctx context.Context, req CallRequest) (CallResponse, e
 		_ = httpResponse.Body.Close()
 	}()
 
-	responseBody, err := readResponseBody(httpResponse.Body, client.bodyLimit(httpResponse.StatusCode))
-	if err != nil {
-		return CallResponse{}, fmt.Errorf("read response: %w", err)
-	}
-
 	callResponse := CallResponse{
 		StatusCode: httpResponse.StatusCode,
 		RequestID:  strings.TrimSpace(httpResponse.Header.Get("X-Request-Id")),
-		Body:       responseBody,
 	}
+
+	responseBody, err := readResponseBody(httpResponse.Body, client.bodyLimit(callResponse.StatusCode))
+	if err != nil {
+		if callResponse.StatusCode < 200 || callResponse.StatusCode >= 300 {
+			return CallResponse{}, APIError{
+				StatusCode: callResponse.StatusCode,
+				RequestID:  callResponse.RequestID,
+				Err:        fmt.Errorf("read error response: %w", err),
+			}
+		}
+		return CallResponse{}, fmt.Errorf("read response: %w", err)
+	}
+	callResponse.Body = responseBody
 
 	if httpResponse.StatusCode < 200 || httpResponse.StatusCode >= 300 {
 		return CallResponse{}, parseAPIError(callResponse)

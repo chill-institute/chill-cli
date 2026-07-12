@@ -52,6 +52,11 @@ func TestClassifyErrorMapsAPIAndFallbackCases(t *testing.T) {
 		t.Fatalf("auth classified = %#v", authClassified)
 	}
 
+	readFailure := classifyError(rpc.APIError{StatusCode: 401, RequestID: "req-read", Err: errors.New("read error response")})
+	if readFailure.Kind != errorKindAuth || readFailure.Code != "api_error" || readFailure.RequestID != "req-read" || readFailure.StatusCode != 401 {
+		t.Fatalf("read failure classified = %#v", readFailure)
+	}
+
 	apiClassified := classifyError(rpc.APIError{Message: "boom", StatusCode: 500})
 	if apiClassified.Kind != errorKindAPI || apiClassified.Code != "api_error" {
 		t.Fatalf("api classified = %#v", apiClassified)
