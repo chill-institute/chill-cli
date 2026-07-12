@@ -2,7 +2,9 @@ package cli
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/chill-institute/chill-cli/internal/rpc"
@@ -78,6 +80,48 @@ func TestWriteErrorPrefersJSONWhenRequested(t *testing.T) {
 	writeError(app, rpc.APIError{Code: "nope", Message: "boom", StatusCode: 418, RequestID: "req-1"})
 	if got := stderr.String(); got == "" || got[0] != '{' {
 		t.Fatalf("stderr = %q, want json envelope", got)
+	}
+}
+
+func TestWriteErrorEscapesControlsInPrettyMode(t *testing.T) {
+	t.Parallel()
+
+	stderr := &bytes.Buffer{}
+	app := &appContext{
+		opts:   &appOptions{output: outputPretty},
+		stderr: stderr,
+	}
+
+	writeError(app, rpc.APIError{Message: "upstream\x1b[2J\nspoofed", StatusCode: 500})
+	got := stderr.String()
+	if strings.Contains(got, "\x1b") || strings.Contains(got, "\nspoofed") {
+		t.Fatalf("stderr contains raw terminal control: %q", got)
+	}
+	if !strings.Contains(got, `upstream\x1b[2J\nspoofed`) {
+		t.Fatalf("stderr = %q, want escaped controls", got)
+	}
+}
+
+func TestWriteErrorPreservesControlTextInJSONData(t *testing.T) {
+	t.Parallel()
+
+	stderr := &bytes.Buffer{}
+	app := &appContext{
+		opts:   &appOptions{output: outputJSON},
+		stderr: stderr,
+	}
+
+	writeError(app, rpc.APIError{Message: "upstream\x1b[2J\nspoofed", StatusCode: 500})
+	if bytes.ContainsRune(stderr.Bytes(), '\x1b') {
+		t.Fatalf("json stderr contains raw escape: %q", stderr.String())
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(stderr.Bytes(), &payload); err != nil {
+		t.Fatalf("json.Unmarshal() error = %v", err)
+	}
+	message, ok := payload["message"].(string)
+	if !ok || !strings.Contains(message, "upstream\x1b[2J\nspoofed") {
+		t.Fatalf("message = %#v, want original semantic text", payload["message"])
 	}
 }
 

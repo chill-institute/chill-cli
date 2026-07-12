@@ -161,7 +161,7 @@ func writeError(app *appContext, err error) {
 			return
 		}
 	}
-	_, _ = fmt.Fprintln(app.stderr, classified.Message)
+	_, _ = fmt.Fprintln(app.stderr, sanitizeTerminalText(classified.Message))
 }
 
 func wantsJSONOutput(value string) bool {

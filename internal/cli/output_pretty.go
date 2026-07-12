@@ -435,11 +435,11 @@ func appendUserSettingsLines(lines []string, settings map[string]any, indent str
 	for _, key := range keys {
 		value := settings[key]
 		if nested, ok := value.(map[string]any); ok {
-			lines = append(lines, fmt.Sprintf("%s%s", indent, dim(key+":")))
+			lines = append(lines, fmt.Sprintf("%s%s", indent, dim(sanitizeTerminalText(key)+":")))
 			lines = appendUserSettingsLines(lines, nested, indent+"  ")
 			continue
 		}
-		lines = append(lines, fmt.Sprintf("%s%s %s", indent, dim(key+":"), prettyValue(value)))
+		lines = append(lines, fmt.Sprintf("%s%s %s", indent, dim(sanitizeTerminalText(key)+":"), prettyValue(value)))
 	}
 	return lines
 }
@@ -677,7 +677,7 @@ func stringValue(payload map[string]any, key string) (string, bool) {
 
 	switch typed := value.(type) {
 	case string:
-		trimmed := strings.TrimSpace(typed)
+		trimmed := sanitizeTerminalText(strings.TrimSpace(typed))
 		return trimmed, trimmed != ""
 	case float64:
 		return formatNumeric(typed), true
@@ -703,7 +703,7 @@ func prettyValue(value any) string {
 	case nil:
 		return "null"
 	case string:
-		return typed
+		return sanitizeTerminalText(typed)
 	case bool:
 		if typed {
 			return "true"
@@ -721,7 +721,7 @@ func prettyValue(value any) string {
 		}
 		return strings.Join(items, ", ")
 	default:
-		return fmt.Sprintf("%v", value)
+		return sanitizeTerminalText(fmt.Sprintf("%v", value))
 	}
 }
 
