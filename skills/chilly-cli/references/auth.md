@@ -14,12 +14,11 @@ Use this reference when the task is about authentication, profile selection, or 
 ## Canonical Commands
 
 - Interactive login: `chilly auth login`
-- Non-interactive existing token: `chilly auth login --token <token>` (command arguments may be visible in shell history or process inspection)
+- Non-interactive existing token: `chilly auth login --token <token>`
 - Localhost callback flow: `chilly auth login --local-browser`
 - Localhost callback flow without auto-open: `chilly auth login --local-browser --no-browser`
 - Preview hosted web token URL: `chilly auth login --dry-run --output json`
 - Preview token login from stdin JSON: `printf '{"token":"token-from-setup","skip_verify":true}' | chilly auth login --json @- --dry-run --output json`
-- For unattended workflows, feed the same JSON shape from a secret manager or another source that does not place credentials in command arguments.
 - Logout: `chilly auth logout --output json`
 - Preview logout: `chilly auth logout --dry-run --output json`
 - Verify current auth: `chilly whoami --output json`
