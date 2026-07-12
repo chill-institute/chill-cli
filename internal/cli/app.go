@@ -16,6 +16,7 @@ import (
 
 	"github.com/chill-institute/chill-cli/internal/config"
 	"github.com/chill-institute/chill-cli/internal/rpc"
+	"golang.org/x/term"
 )
 
 const (
@@ -38,6 +39,7 @@ type appContext struct {
 	stdout          io.Writer
 	stderr          io.Writer
 	openURL         func(string) error
+	readSecret      func(io.Reader) (string, error)
 	authFlowTimeout time.Duration
 	isTerminal      func(io.Writer) bool
 	isInputTerminal func(io.Reader) bool
@@ -82,6 +84,7 @@ func newAppContext(opts *appOptions) *appContext {
 		stdout:          os.Stdout,
 		stderr:          os.Stderr,
 		openURL:         openBrowser,
+		readSecret:      readTerminalSecret,
 		authFlowTimeout: 2 * time.Minute,
 		isTerminal:      writerIsTerminal,
 		isInputTerminal: readerIsTerminal,
@@ -284,6 +287,37 @@ func (app *appContext) readLine(prompt string) (string, error) {
 		return "", err
 	}
 	return strings.TrimSpace(line), nil
+}
+
+func (app *appContext) readSecretLine(prompt string) (string, error) {
+	if _, err := fmt.Fprint(app.stderr, prompt); err != nil {
+		return "", err
+	}
+	readSecret := app.readSecret
+	if readSecret == nil {
+		readSecret = readTerminalSecret
+	}
+	secret, readErr := readSecret(app.stdin)
+	_, newlineErr := fmt.Fprintln(app.stderr)
+	if readErr != nil {
+		return "", readErr
+	}
+	if newlineErr != nil {
+		return "", newlineErr
+	}
+	return strings.TrimSpace(secret), nil
+}
+
+func readTerminalSecret(reader io.Reader) (string, error) {
+	file, ok := reader.(*os.File)
+	if !ok {
+		return "", fmt.Errorf("secure input requires a terminal")
+	}
+	secret, err := term.ReadPassword(int(file.Fd()))
+	if err != nil {
+		return "", err
+	}
+	return string(secret), nil
 }
 
 func (app *appContext) withProgress(run func() error) error {

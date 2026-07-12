@@ -47,6 +47,66 @@ func TestReadLineTrimsInput(t *testing.T) {
 	}
 }
 
+func TestReadSecretLineHidesAndTrimsInput(t *testing.T) {
+	t.Parallel()
+
+	stdin := strings.NewReader("")
+	stderr := &strings.Builder{}
+	app := &appContext{
+		stdin:  stdin,
+		stderr: stderr,
+		readSecret: func(reader io.Reader) (string, error) {
+			if reader != stdin {
+				t.Fatal("readSecret() received unexpected reader")
+			}
+			return " setup-token ", nil
+		},
+	}
+
+	secret, err := app.readSecretLine("token: ")
+	if err != nil {
+		t.Fatalf("readSecretLine() error = %v", err)
+	}
+	if secret != "setup-token" {
+		t.Fatalf("secret = %q", secret)
+	}
+	if stderr.String() != "token: \n" {
+		t.Fatalf("stderr = %q", stderr.String())
+	}
+	if strings.Contains(stderr.String(), secret) {
+		t.Fatalf("stderr exposed secret: %q", stderr.String())
+	}
+}
+
+func TestReadSecretLinePropagatesReadError(t *testing.T) {
+	t.Parallel()
+
+	boom := errors.New("boom")
+	stderr := &strings.Builder{}
+	app := &appContext{
+		stdin:  strings.NewReader(""),
+		stderr: stderr,
+		readSecret: func(io.Reader) (string, error) {
+			return "", boom
+		},
+	}
+
+	if _, err := app.readSecretLine("token: "); !errors.Is(err, boom) {
+		t.Fatalf("readSecretLine() error = %v, want %v", err, boom)
+	}
+	if stderr.String() != "token: \n" {
+		t.Fatalf("stderr = %q", stderr.String())
+	}
+}
+
+func TestReadTerminalSecretRequiresFile(t *testing.T) {
+	t.Parallel()
+
+	if _, err := readTerminalSecret(strings.NewReader("secret")); err == nil {
+		t.Fatal("readTerminalSecret() error = nil, want terminal error")
+	}
+}
+
 func TestOpenBrowserRejectsEmptyURL(t *testing.T) {
 	t.Parallel()
 

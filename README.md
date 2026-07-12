@@ -38,11 +38,13 @@ chilly whoami --output json
 chilly search --query "dune"
 ```
 
-The default login flow opens the hosted web token page and waits for the setup token to be pasted back into the terminal. If you already have a setup token:
+The default login flow prints the hosted web token page, then waits for the setup token to be pasted into a hidden terminal prompt. Open the printed page in a signed-in browser. If you already have a setup token:
 
 ```bash
 chilly auth login --token <token>
 ```
+
+`--token` is convenient for automation, but command arguments may be visible in shell history or process inspection. Prefer interactive login for humans or `--json @-` fed by a secret manager for unattended workflows.
 
 ## Scriptable Usage
 

@@ -25,7 +25,7 @@ func TestNewAppContextDefaults(t *testing.T) {
 	if app.stdin != os.Stdin || app.stdout != os.Stdout || app.stderr != os.Stderr {
 		t.Fatal("newAppContext() did not wire stdio defaults")
 	}
-	if app.openURL == nil || app.isTerminal == nil || app.isInputTerminal == nil || app.newTicker == nil {
+	if app.openURL == nil || app.readSecret == nil || app.isTerminal == nil || app.isInputTerminal == nil || app.newTicker == nil {
 		t.Fatal("newAppContext() left helper hooks nil")
 	}
 

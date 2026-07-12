@@ -37,11 +37,14 @@ func TestAuthLoginWebTokenFlowPromptsForTokenAndVerifies(t *testing.T) {
 	stderr := &bytes.Buffer{}
 	app := &appContext{
 		opts:            &appOptions{configPath: configPath, apiURL: server.URL, output: outputJSON},
-		stdin:           strings.NewReader("web-token\n"),
+		stdin:           strings.NewReader(""),
 		stdout:          stdout,
 		stderr:          stderr,
 		authFlowTimeout: 2 * time.Second,
 		isInputTerminal: func(io.Reader) bool { return true },
+		readSecret: func(io.Reader) (string, error) {
+			return "web-token", nil
+		},
 		openURL: func(string) error {
 			t.Fatal("openURL should not be called for the default web token flow")
 			return nil
@@ -218,10 +221,13 @@ func TestAuthLoginWebTokenFlowSupportsPromptOnly(t *testing.T) {
 	stderr := &bytes.Buffer{}
 	app := &appContext{
 		opts:            &appOptions{output: outputNDJSON},
-		stdin:           strings.NewReader("manual-token\n"),
+		stdin:           strings.NewReader(""),
 		stdout:          stdout,
 		stderr:          stderr,
 		isInputTerminal: func(io.Reader) bool { return true },
+		readSecret: func(io.Reader) (string, error) {
+			return "manual-token", nil
+		},
 		openURL: func(string) error {
 			t.Fatal("openURL should not be called for the default web token flow")
 			return nil
