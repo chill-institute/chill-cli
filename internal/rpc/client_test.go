@@ -4,12 +4,37 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
 )
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (fn roundTripFunc) RoundTrip(request *http.Request) (*http.Response, error) {
+	return fn(request)
+}
+
+type trackingReadCloser struct {
+	io.Reader
+	closed bool
+}
+
+func (body *trackingReadCloser) Close() error {
+	body.closed = true
+	return nil
+}
+
+type failingReader struct {
+	err error
+}
+
+func (reader failingReader) Read([]byte) (int, error) {
+	return 0, reader.err
+}
 
 func TestNewClientUsesDefaultTimeoutWithoutCustomClient(t *testing.T) {
 	t.Parallel()
@@ -194,5 +219,99 @@ func TestCallRejectsDangerousProcedureNames(t *testing.T) {
 				t.Fatalf("Call(%q) error = nil, want rejection", procedure)
 			}
 		})
+	}
+}
+
+func TestReadResponseBodyEnforcesLimit(t *testing.T) {
+	t.Parallel()
+
+	testCases := []struct {
+		name    string
+		reader  io.Reader
+		limit   int64
+		want    string
+		wantErr error
+	}{
+		{name: "empty", reader: strings.NewReader(""), limit: 3, want: ""},
+		{name: "exact limit", reader: strings.NewReader("abc"), limit: 3, want: "abc"},
+		{name: "overflow", reader: strings.NewReader("abcd"), limit: 3, wantErr: errResponseBodyTooLarge},
+		{name: "reader failure", reader: failingReader{err: io.ErrUnexpectedEOF}, limit: 3, wantErr: io.ErrUnexpectedEOF},
+	}
+
+	for _, testCase := range testCases {
+		testCase := testCase
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+			payload, err := readResponseBody(testCase.reader, testCase.limit)
+			if !errors.Is(err, testCase.wantErr) {
+				t.Fatalf("readResponseBody() error = %v, want %v", err, testCase.wantErr)
+			}
+			if string(payload) != testCase.want {
+				t.Fatalf("payload = %q, want %q", payload, testCase.want)
+			}
+		})
+	}
+}
+
+func TestCallAppliesStatusSpecificBodyLimits(t *testing.T) {
+	t.Parallel()
+
+	testCases := []struct {
+		name       string
+		statusCode int
+	}{
+		{name: "success", statusCode: http.StatusOK},
+		{name: "error", statusCode: http.StatusBadGateway},
+	}
+	for _, testCase := range testCases {
+		testCase := testCase
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+			server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
+				writer.WriteHeader(testCase.statusCode)
+				_, _ = writer.Write([]byte("oversized"))
+			}))
+			defer server.Close()
+
+			client := NewClient(server.URL, server.Client())
+			client.responseBodyLimit = 4
+			client.errorBodyLimit = 4
+			_, err := client.Call(context.Background(), CallRequest{
+				Procedure: "chill.v4.UserService/GetUserProfile",
+				AuthMode:  AuthNone,
+			})
+			if !errors.Is(err, errResponseBodyTooLarge) {
+				t.Fatalf("Call() error = %v, want body limit error", err)
+			}
+			if strings.Contains(err.Error(), "oversized") {
+				t.Fatalf("Call() error exposed response body: %v", err)
+			}
+		})
+	}
+}
+
+func TestCallClosesOversizedResponseBody(t *testing.T) {
+	t.Parallel()
+
+	body := &trackingReadCloser{Reader: strings.NewReader("oversized")}
+	httpClient := &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Header:     make(http.Header),
+			Body:       body,
+		}, nil
+	})}
+	client := NewClient("https://api.chill.institute", httpClient)
+	client.responseBodyLimit = 4
+
+	_, err := client.Call(context.Background(), CallRequest{
+		Procedure: "chill.v4.UserService/GetUserProfile",
+		AuthMode:  AuthNone,
+	})
+	if !errors.Is(err, errResponseBodyTooLarge) {
+		t.Fatalf("Call() error = %v, want body limit error", err)
+	}
+	if !body.closed {
+		t.Fatal("response body was not closed")
 	}
 }

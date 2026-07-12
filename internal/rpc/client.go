@@ -19,13 +19,19 @@ const (
 	AuthNone             AuthMode = "none"
 	AuthUser             AuthMode = "user"
 	DefaultClientTimeout          = 20 * time.Second
+	maxResponseBodyBytes          = 32 << 20
+	maxErrorBodyBytes             = 64 << 10
 )
+
+var errResponseBodyTooLarge = errors.New("rpc response body exceeds limit")
 
 type AuthMode string
 
 type Client struct {
-	baseURL    string
-	httpClient *http.Client
+	baseURL           string
+	httpClient        *http.Client
+	responseBodyLimit int64
+	errorBodyLimit    int64
 }
 
 type CallRequest struct {
@@ -74,8 +80,10 @@ func NewClient(baseURL string, httpClient *http.Client) *Client {
 	}
 
 	return &Client{
-		baseURL:    trimmedBaseURL,
-		httpClient: client,
+		baseURL:           trimmedBaseURL,
+		httpClient:        client,
+		responseBodyLimit: maxResponseBodyBytes,
+		errorBodyLimit:    maxErrorBodyBytes,
 	}
 }
 
@@ -115,7 +123,7 @@ func (client Client) Call(ctx context.Context, req CallRequest) (CallResponse, e
 		_ = httpResponse.Body.Close()
 	}()
 
-	responseBody, err := io.ReadAll(httpResponse.Body)
+	responseBody, err := readResponseBody(httpResponse.Body, client.bodyLimit(httpResponse.StatusCode))
 	if err != nil {
 		return CallResponse{}, fmt.Errorf("read response: %w", err)
 	}
@@ -131,6 +139,33 @@ func (client Client) Call(ctx context.Context, req CallRequest) (CallResponse, e
 	}
 
 	return callResponse, nil
+}
+
+func (client Client) bodyLimit(statusCode int) int64 {
+	if statusCode < 200 || statusCode >= 300 {
+		if client.errorBodyLimit > 0 {
+			return client.errorBodyLimit
+		}
+		return maxErrorBodyBytes
+	}
+	if client.responseBodyLimit > 0 {
+		return client.responseBodyLimit
+	}
+	return maxResponseBodyBytes
+}
+
+func readResponseBody(reader io.Reader, limit int64) ([]byte, error) {
+	if limit <= 0 {
+		return nil, errors.New("response body limit must be positive")
+	}
+	payload, err := io.ReadAll(io.LimitReader(reader, limit+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(payload)) > limit {
+		return nil, fmt.Errorf("%w: maximum %d bytes", errResponseBodyTooLarge, limit)
+	}
+	return payload, nil
 }
 
 func normalizeProcedure(value string) (string, error) {
