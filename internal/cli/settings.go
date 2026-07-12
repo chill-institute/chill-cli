@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"net"
 	"net/url"
 	"strings"
 
@@ -272,6 +273,9 @@ func normalizeAPIBaseURL(raw string) (string, error) {
 	if parsed.Scheme != "http" && parsed.Scheme != "https" {
 		return "", usageError("invalid_api_base_url", "api-base-url must start with http:// or https://")
 	}
+	if parsed.Scheme == "http" && !isLoopbackHost(parsed.Hostname()) {
+		return "", usageError("invalid_api_base_url", "api-base-url must use https except for loopback development hosts")
+	}
 	if parsed.User != nil {
 		return "", usageError("invalid_api_base_url", "api-base-url must not include user info")
 	}
@@ -283,4 +287,13 @@ func normalizeAPIBaseURL(raw string) (string, error) {
 	}
 
 	return strings.TrimRight(trimmed, "/"), nil
+}
+
+func isLoopbackHost(raw string) bool {
+	host := strings.ToLower(strings.TrimSpace(raw))
+	if host == "localhost" {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
 }

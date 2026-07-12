@@ -25,7 +25,7 @@ func TestNewAppContextDefaults(t *testing.T) {
 	if app.stdin != os.Stdin || app.stdout != os.Stdout || app.stderr != os.Stderr {
 		t.Fatal("newAppContext() did not wire stdio defaults")
 	}
-	if app.openURL == nil || app.isTerminal == nil || app.isInputTerminal == nil || app.newTicker == nil {
+	if app.openURL == nil || app.readSecret == nil || app.isTerminal == nil || app.isInputTerminal == nil || app.newTicker == nil {
 		t.Fatal("newAppContext() left helper hooks nil")
 	}
 
@@ -94,6 +94,46 @@ func TestLoadConfigRejectsUnsafeAPIOverride(t *testing.T) {
 	app := &appContext{opts: &appOptions{configPath: filepath.Join(t.TempDir(), "config.json"), apiURL: "https://api.chill.institute/v4", output: outputJSON}}
 	if _, err := app.loadConfig(); err == nil {
 		t.Fatal("loadConfig() error = nil, want invalid api url error")
+	}
+}
+
+func TestLoadConfigRejectsUnsafeStoredAPIURL(t *testing.T) {
+	t.Parallel()
+
+	configPath := filepath.Join(t.TempDir(), "config.json")
+	store, err := config.NewStore(configPath)
+	if err != nil {
+		t.Fatalf("NewStore() error = %v", err)
+	}
+	if err := store.Save(config.Config{APIBaseURL: "http://example.test", AuthToken: "test-token"}); err != nil {
+		t.Fatalf("Save() error = %v", err)
+	}
+
+	app := &appContext{opts: &appOptions{configPath: configPath, output: outputJSON}}
+	if _, err := app.loadConfig(); err == nil || !strings.Contains(err.Error(), "must use https") {
+		t.Fatalf("loadConfig() error = %v, want https error", err)
+	}
+}
+
+func TestLoadConfigAllowsStoredLoopbackHTTPURL(t *testing.T) {
+	t.Parallel()
+
+	configPath := filepath.Join(t.TempDir(), "config.json")
+	store, err := config.NewStore(configPath)
+	if err != nil {
+		t.Fatalf("NewStore() error = %v", err)
+	}
+	if err := store.Save(config.Config{APIBaseURL: "http://127.0.0.1:8080"}); err != nil {
+		t.Fatalf("Save() error = %v", err)
+	}
+
+	app := &appContext{opts: &appOptions{configPath: configPath, output: outputJSON}}
+	cfg, err := app.loadConfig()
+	if err != nil {
+		t.Fatalf("loadConfig() error = %v", err)
+	}
+	if cfg.APIBaseURL != "http://127.0.0.1:8080" {
+		t.Fatalf("APIBaseURL = %q", cfg.APIBaseURL)
 	}
 }
 

@@ -237,14 +237,41 @@ func TestNormalizeEpisodeOrdinal(t *testing.T) {
 func TestSettingsValidationHelpers(t *testing.T) {
 	t.Parallel()
 
-	if _, err := normalizeAPIBaseURL("https://api.chill.institute/path"); err == nil {
-		t.Fatal("normalizeAPIBaseURL(path) error = nil, want error")
+	validURLs := map[string]string{
+		"https://api.chill.institute/": "https://api.chill.institute",
+		"https://api.example.test":     "https://api.example.test",
+		"http://localhost:8080":        "http://localhost:8080",
+		"http://127.0.0.1:8080":        "http://127.0.0.1:8080",
+		"http://[::1]:8080":            "http://[::1]:8080",
 	}
-	if _, err := normalizeAPIBaseURL("https://user@api.chill.institute"); err == nil {
-		t.Fatal("normalizeAPIBaseURL(userinfo) error = nil, want error")
+	for raw, want := range validURLs {
+		raw := raw
+		want := want
+		t.Run(raw, func(t *testing.T) {
+			t.Parallel()
+			got, err := normalizeAPIBaseURL(raw)
+			if err != nil || got != want {
+				t.Fatalf("normalizeAPIBaseURL(%q) = %q, %v; want %q", raw, got, err, want)
+			}
+		})
 	}
-	if got, err := normalizeAPIBaseURL("https://api.chill.institute/"); err != nil || got != "https://api.chill.institute" {
-		t.Fatalf("normalizeAPIBaseURL() = %q, %v", got, err)
+
+	invalidURLs := []string{
+		"https://api.chill.institute/path",
+		"https://user@api.chill.institute",
+		"http://example.test",
+		"http://api.localhost:3000",
+		"http://localhost.example.test",
+		"http://notlocalhost",
+	}
+	for _, raw := range invalidURLs {
+		raw := raw
+		t.Run(raw, func(t *testing.T) {
+			t.Parallel()
+			if _, err := normalizeAPIBaseURL(raw); err == nil {
+				t.Fatalf("normalizeAPIBaseURL(%q) error = nil, want error", raw)
+			}
+		})
 	}
 
 	if _, err := normalizeSettingsKey("api_base_url"); err != nil {

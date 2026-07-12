@@ -3,20 +3,39 @@ name: Verify
 on:
   pull_request:
 
+permissions: {}
+
+concurrency:
+  group: verify-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   verify:
+    name: Verify
     runs-on: blacksmith-2vcpu-ubuntu-2404
     timeout-minutes: 20
+    permissions:
+      contents: read
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Check out API contracts
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          repository: chill-institute/chill-contracts
+          ref: b4223966fe5fdf708c2073f575947a3535b006f0 # main
+          path: .contracts/chill-contracts
+          persist-credentials: false
 
       - name: Set up mise
-        uses: jdx/mise-action@v4
+        uses: jdx/mise-action@e6a8b3978addb5a52f2b4cd9d91eafa7f0ab959d # v4.2.0
 
       - name: Cache Go dependencies
-        uses: actions/cache@v5
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             ~/.cache/go-build
@@ -29,3 +48,8 @@ jobs:
 
       - name: Verify
         run: mise run verify
+
+      - name: Verify API contract parity
+        env:
+          CHILLY_CONTRACTS_PROTO: ${{ github.workspace }}/.contracts/chill-contracts/proto/chill/v4/api.proto
+        run: mise run contracts:check

@@ -4,8 +4,9 @@ Use this reference when the task is about authentication, profile selection, or 
 
 ## Rules
 
-- Parse only `stdout` Browser hints and notices may appear on `stderr`
+- Parse only `stdout`. Browser hints and notices may appear on `stderr`.
 - Check the active host first with `chilly settings get api-base-url --output json`
+- Use HTTPS for remote API hosts. Plain HTTP is accepted only for loopback development hosts.
 - Use `--profile <name>` or `--config <path>` when you need isolated state.
 - Use `whoami` after auth changes when you need positive confirmation that the token works.
 - Use `doctor --output json` when auth and local config may both be part of the problem.
@@ -32,6 +33,6 @@ Use this reference when the task is about authentication, profile selection, or 
 
 ## Browser Token Flow
 
-`chilly auth login` now defaults to the hosted web token flow: it prints the `/auth/cli-token` page for the configured web app host, tells the user to copy the setup token, then waits for that token to be pasted back into the terminal. Use `chilly auth login --dry-run --output json` to preview the exact `login_url` without saving credentials.
+`chilly auth login` defaults to the hosted web token flow: it prints the `/auth/cli-token` page for the configured web app host, tells the user to copy the setup token, then waits at a hidden terminal prompt. Use `chilly auth login --dry-run --output json` to preview the exact `login_url` without saving credentials.
 
-If the browser is on another machine, open the same page in a signed-in browser and copy the token into `chilly auth login --token <token>`
+If the browser is on another machine, open the same page in a signed-in browser and paste the token into the hidden prompt. Keep `--token` for compatibility when automation cannot provide controlled stdin.

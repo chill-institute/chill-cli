@@ -27,6 +27,66 @@ func TestRenderWhoamiPretty(t *testing.T) {
 	}
 }
 
+func TestPrettyRenderersEscapeUntrustedControls(t *testing.T) {
+	t.Parallel()
+
+	testCases := []struct {
+		name   string
+		render func(any) (string, bool, error)
+		value  any
+		want   string
+	}{
+		{
+			name:   "search result",
+			render: renderSearchPretty,
+			value: map[string]any{
+				"query": "dune\nspoofed",
+				"results": []any{map[string]any{
+					"title": "Dune\x1b]52;c;payload\a",
+				}},
+			},
+			want: `Dune\x1b]52;c;payload\a`,
+		},
+		{
+			name:   "settings key and value",
+			render: renderUserSettingsPretty,
+			value: map[string]any{
+				"catalog\x1b[2J": "movies\nspoofed",
+			},
+			want: `catalog\x1b[2J: movies\nspoofed`,
+		},
+		{
+			name:   "transfer message",
+			render: renderTransferPretty,
+			value: map[string]any{
+				"statusMessage": "queued\rreplaced",
+			},
+			want: `queued\rreplaced`,
+		},
+	}
+
+	for _, testCase := range testCases {
+		testCase := testCase
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+			rendered, ok, err := testCase.render(testCase.value)
+			if err != nil {
+				t.Fatalf("render() error = %v", err)
+			}
+			if !ok {
+				t.Fatal("render() ok = false, want true")
+			}
+			visible := stripANSI(rendered)
+			if strings.ContainsAny(visible, "\x1b\r\a") {
+				t.Fatalf("rendered contains raw terminal control: %q", visible)
+			}
+			if !strings.Contains(visible, testCase.want) {
+				t.Fatalf("rendered = %q, want %q", visible, testCase.want)
+			}
+		})
+	}
+}
+
 func TestRenderSearchPretty(t *testing.T) {
 	t.Parallel()
 

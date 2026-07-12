@@ -32,3 +32,32 @@ func TestDimWrapsWithANSI(t *testing.T) {
 		t.Fatal("dim() should contain ANSI codes")
 	}
 }
+
+func TestSanitizeTerminalTextEscapesControls(t *testing.T) {
+	t.Parallel()
+
+	input := "Dune\nPart\tTwo\r\x1b[2J\x7f\u0085"
+	want := `Dune\nPart\tTwo\r\x1b[2J\x7f\u0085`
+	if got := sanitizeTerminalText(input); got != want {
+		t.Fatalf("sanitizeTerminalText() = %q, want %q", got, want)
+	}
+}
+
+func TestSanitizeTerminalTextEscapesUnicodeFormatting(t *testing.T) {
+	t.Parallel()
+
+	input := "safe\u202espoof\u200bhidden"
+	want := `safe\u202espoof\u200bhidden`
+	if got := sanitizeTerminalText(input); got != want {
+		t.Fatalf("sanitizeTerminalText() = %q, want %q", got, want)
+	}
+}
+
+func TestSanitizeTerminalTextPreservesPrintableUnicode(t *testing.T) {
+	t.Parallel()
+
+	const input = "Dune: Çöl Gezegeni — 日本語"
+	if got := sanitizeTerminalText(input); got != input {
+		t.Fatalf("sanitizeTerminalText() = %q, want %q", got, input)
+	}
+}

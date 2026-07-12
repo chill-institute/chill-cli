@@ -43,8 +43,9 @@ func newAuthLoginCommand(app *appContext) *cobra.Command {
 		Short: "Sign in by pasting a setup token from the hosted web flow",
 		Long: strings.TrimSpace(`
 Sign in by opening the hosted web token page, copying the setup token,
-and pasting it back into the terminal. Use --token for non-interactive
-or remote environments where you already have the token. Use
+and pasting it into a hidden terminal prompt. Use --token only when
+automation cannot provide controlled stdin; command arguments may be
+visible in shell history or process inspection. Use
 --local-browser only when you explicitly want the localhost
 callback flow with optional browser auto-open.
 `),
@@ -258,7 +259,7 @@ func (app *appContext) loginWithWebToken(cfg config.Config, skipOpen bool) (stri
 		return "", usageError("interactive_auth_requires_terminal", "auth login requires a terminal for token entry; use --token or --json for non-interactive auth")
 	}
 
-	token, err := app.readLine("Paste setup token: ")
+	token, err := app.readSecretLine("Paste setup token: ")
 	if err != nil {
 		return "", fmt.Errorf("read setup token: %w", err)
 	}

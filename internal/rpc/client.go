@@ -19,13 +19,19 @@ const (
 	AuthNone             AuthMode = "none"
 	AuthUser             AuthMode = "user"
 	DefaultClientTimeout          = 20 * time.Second
+	maxResponseBodyBytes          = 32 << 20
+	maxErrorBodyBytes             = 64 << 10
 )
+
+var errResponseBodyTooLarge = errors.New("rpc response body exceeds limit")
 
 type AuthMode string
 
 type Client struct {
-	baseURL    string
-	httpClient *http.Client
+	baseURL           string
+	httpClient        *http.Client
+	responseBodyLimit int64
+	errorBodyLimit    int64
 }
 
 type CallRequest struct {
@@ -53,13 +59,21 @@ type APIError struct {
 	Message    string
 	RequestID  string
 	Body       string
+	Err        error
 }
 
 func (err APIError) Error() string {
 	if err.Code != "" || err.Message != "" {
 		return fmt.Sprintf("api error (%d): %s: %s", err.StatusCode, err.Code, err.Message)
 	}
+	if err.Err != nil {
+		return fmt.Sprintf("api error (%d): %v", err.StatusCode, err.Err)
+	}
 	return fmt.Sprintf("api error (%d): %s", err.StatusCode, err.Body)
+}
+
+func (err APIError) Unwrap() error {
+	return err.Err
 }
 
 func NewClient(baseURL string, httpClient *http.Client) *Client {
@@ -68,15 +82,56 @@ func NewClient(baseURL string, httpClient *http.Client) *Client {
 		trimmedBaseURL = "https://api.chill.institute"
 	}
 
-	client := httpClient
-	if client == nil {
-		client = &http.Client{Timeout: DefaultClientTimeout}
+	return &Client{
+		baseURL:           trimmedBaseURL,
+		httpClient:        prepareHTTPClient(httpClient),
+		responseBodyLimit: maxResponseBodyBytes,
+		errorBodyLimit:    maxErrorBodyBytes,
+	}
+}
+
+func prepareHTTPClient(source *http.Client) *http.Client {
+	if source == nil {
+		source = &http.Client{Timeout: DefaultClientTimeout}
 	}
 
-	return &Client{
-		baseURL:    trimmedBaseURL,
-		httpClient: client,
+	client := *source
+	checkRedirect := source.CheckRedirect
+	client.CheckRedirect = func(request *http.Request, via []*http.Request) error {
+		if len(via) == 0 || !sameOrigin(via[0].URL, request.URL) {
+			return errors.New("refusing redirect that changes API origin")
+		}
+		if checkRedirect != nil {
+			return checkRedirect(request, via)
+		}
+		if len(via) >= 10 {
+			return errors.New("stopped after 10 redirects")
+		}
+		return nil
 	}
+	return &client
+}
+
+func sameOrigin(initial *url.URL, destination *url.URL) bool {
+	if initial == nil || destination == nil || destination.User != nil {
+		return false
+	}
+	return strings.EqualFold(initial.Scheme, destination.Scheme) &&
+		strings.EqualFold(initial.Hostname(), destination.Hostname()) &&
+		effectivePort(initial) == effectivePort(destination)
+}
+
+func effectivePort(value *url.URL) string {
+	if port := value.Port(); port != "" {
+		return port
+	}
+	if strings.EqualFold(value.Scheme, "https") {
+		return "443"
+	}
+	if strings.EqualFold(value.Scheme, "http") {
+		return "80"
+	}
+	return ""
 }
 
 func (client Client) Call(ctx context.Context, req CallRequest) (CallResponse, error) {
@@ -115,22 +170,56 @@ func (client Client) Call(ctx context.Context, req CallRequest) (CallResponse, e
 		_ = httpResponse.Body.Close()
 	}()
 
-	responseBody, err := io.ReadAll(httpResponse.Body)
-	if err != nil {
-		return CallResponse{}, fmt.Errorf("read response: %w", err)
-	}
-
 	callResponse := CallResponse{
 		StatusCode: httpResponse.StatusCode,
 		RequestID:  strings.TrimSpace(httpResponse.Header.Get("X-Request-Id")),
-		Body:       responseBody,
 	}
+
+	responseBody, err := readResponseBody(httpResponse.Body, client.bodyLimit(callResponse.StatusCode))
+	if err != nil {
+		if callResponse.StatusCode < 200 || callResponse.StatusCode >= 300 {
+			return CallResponse{}, APIError{
+				StatusCode: callResponse.StatusCode,
+				RequestID:  callResponse.RequestID,
+				Err:        fmt.Errorf("read error response: %w", err),
+			}
+		}
+		return CallResponse{}, fmt.Errorf("read response: %w", err)
+	}
+	callResponse.Body = responseBody
 
 	if httpResponse.StatusCode < 200 || httpResponse.StatusCode >= 300 {
 		return CallResponse{}, parseAPIError(callResponse)
 	}
 
 	return callResponse, nil
+}
+
+func (client Client) bodyLimit(statusCode int) int64 {
+	if statusCode < 200 || statusCode >= 300 {
+		if client.errorBodyLimit > 0 {
+			return client.errorBodyLimit
+		}
+		return maxErrorBodyBytes
+	}
+	if client.responseBodyLimit > 0 {
+		return client.responseBodyLimit
+	}
+	return maxResponseBodyBytes
+}
+
+func readResponseBody(reader io.Reader, limit int64) ([]byte, error) {
+	if limit <= 0 {
+		return nil, errors.New("response body limit must be positive")
+	}
+	payload, err := io.ReadAll(io.LimitReader(reader, limit+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(payload)) > limit {
+		return nil, fmt.Errorf("%w: maximum %d bytes", errResponseBodyTooLarge, limit)
+	}
+	return payload, nil
 }
 
 func normalizeProcedure(value string) (string, error) {
