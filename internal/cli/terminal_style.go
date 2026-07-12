@@ -21,14 +21,14 @@ func dim(s string) string {
 }
 
 func sanitizeTerminalText(value string) string {
-	if strings.IndexFunc(value, unicode.IsControl) < 0 {
+	if strings.IndexFunc(value, isUnsafeTerminalRune) < 0 {
 		return value
 	}
 
 	var sanitized strings.Builder
 	sanitized.Grow(len(value))
 	for _, char := range value {
-		if !unicode.IsControl(char) {
+		if !isUnsafeTerminalRune(char) {
 			sanitized.WriteRune(char)
 			continue
 		}
@@ -36,4 +36,8 @@ func sanitizeTerminalText(value string) string {
 		sanitized.WriteString(escaped[1 : len(escaped)-1])
 	}
 	return sanitized.String()
+}
+
+func isUnsafeTerminalRune(char rune) bool {
+	return unicode.IsControl(char) || unicode.Is(unicode.Cf, char)
 }

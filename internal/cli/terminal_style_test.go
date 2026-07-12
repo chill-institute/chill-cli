@@ -43,6 +43,16 @@ func TestSanitizeTerminalTextEscapesControls(t *testing.T) {
 	}
 }
 
+func TestSanitizeTerminalTextEscapesUnicodeFormatting(t *testing.T) {
+	t.Parallel()
+
+	input := "safe\u202espoof\u200bhidden"
+	want := `safe\u202espoof\u200bhidden`
+	if got := sanitizeTerminalText(input); got != want {
+		t.Fatalf("sanitizeTerminalText() = %q, want %q", got, want)
+	}
+}
+
 func TestSanitizeTerminalTextPreservesPrintableUnicode(t *testing.T) {
 	t.Parallel()
 
