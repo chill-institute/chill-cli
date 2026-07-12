@@ -74,17 +74,56 @@ func NewClient(baseURL string, httpClient *http.Client) *Client {
 		trimmedBaseURL = "https://api.chill.institute"
 	}
 
-	client := httpClient
-	if client == nil {
-		client = &http.Client{Timeout: DefaultClientTimeout}
-	}
-
 	return &Client{
 		baseURL:           trimmedBaseURL,
-		httpClient:        client,
+		httpClient:        prepareHTTPClient(httpClient),
 		responseBodyLimit: maxResponseBodyBytes,
 		errorBodyLimit:    maxErrorBodyBytes,
 	}
+}
+
+func prepareHTTPClient(source *http.Client) *http.Client {
+	if source == nil {
+		source = &http.Client{Timeout: DefaultClientTimeout}
+	}
+
+	client := *source
+	checkRedirect := source.CheckRedirect
+	client.CheckRedirect = func(request *http.Request, via []*http.Request) error {
+		if len(via) == 0 || !sameOrigin(via[0].URL, request.URL) {
+			return errors.New("refusing redirect that changes API origin")
+		}
+		if checkRedirect != nil {
+			return checkRedirect(request, via)
+		}
+		if len(via) >= 10 {
+			return errors.New("stopped after 10 redirects")
+		}
+		return nil
+	}
+	return &client
+}
+
+func sameOrigin(initial *url.URL, destination *url.URL) bool {
+	if initial == nil || destination == nil || destination.User != nil {
+		return false
+	}
+	return strings.EqualFold(initial.Scheme, destination.Scheme) &&
+		strings.EqualFold(initial.Hostname(), destination.Hostname()) &&
+		effectivePort(initial) == effectivePort(destination)
+}
+
+func effectivePort(value *url.URL) string {
+	if port := value.Port(); port != "" {
+		return port
+	}
+	if strings.EqualFold(value.Scheme, "https") {
+		return "443"
+	}
+	if strings.EqualFold(value.Scheme, "http") {
+		return "80"
+	}
+	return ""
 }
 
 func (client Client) Call(ctx context.Context, req CallRequest) (CallResponse, error) {

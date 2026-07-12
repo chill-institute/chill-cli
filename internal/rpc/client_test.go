@@ -48,16 +48,80 @@ func TestNewClientUsesDefaultTimeoutWithoutCustomClient(t *testing.T) {
 	}
 }
 
-func TestNewClientPreservesCustomClientTimeout(t *testing.T) {
+func TestNewClientCopiesCustomClientSettings(t *testing.T) {
 	t.Parallel()
 
 	customClient := &http.Client{Timeout: 5 * time.Second}
 	client := NewClient("https://api.chill.institute", customClient)
-	if client.httpClient != customClient {
-		t.Fatal("NewClient() replaced custom client")
+	if client.httpClient == customClient {
+		t.Fatal("NewClient() reused mutable custom client")
 	}
-	if customClient.Timeout != 5*time.Second {
-		t.Fatalf("custom Timeout = %v, want 5s", customClient.Timeout)
+	if client.httpClient.Timeout != 5*time.Second {
+		t.Fatalf("Timeout = %v, want 5s", client.httpClient.Timeout)
+	}
+	if customClient.CheckRedirect != nil {
+		t.Fatal("NewClient() mutated custom CheckRedirect")
+	}
+}
+
+func TestCallRejectsRedirectThatChangesAPIOrigin(t *testing.T) {
+	t.Parallel()
+
+	redirected := make(chan struct{}, 1)
+	server := httptest.NewTLSServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if request.URL.Path == "/plaintext" {
+			redirected <- struct{}{}
+			writer.WriteHeader(http.StatusNoContent)
+			return
+		}
+		writer.Header().Set("Location", "http://"+request.Host+"/plaintext")
+		writer.WriteHeader(http.StatusTemporaryRedirect)
+	}))
+	defer server.Close()
+
+	client := NewClient(server.URL, server.Client())
+	_, err := client.Call(context.Background(), CallRequest{
+		Procedure: "chill.v4.UserService/GetUserProfile",
+		AuthMode:  AuthUser,
+		AuthToken: "test-token",
+	})
+	if err == nil || !strings.Contains(err.Error(), "refusing redirect that changes API origin") {
+		t.Fatalf("Call() error = %v, want unsafe redirect rejection", err)
+	}
+	select {
+	case <-redirected:
+		t.Fatal("unsafe redirect target received a request")
+	default:
+	}
+}
+
+func TestCallAllowsSameOriginRedirect(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewTLSServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if request.URL.Query().Get("redirected") == "true" {
+			if got := request.Header.Get("Authorization"); got != "Bearer test-token" {
+				t.Fatalf("Authorization = %q", got)
+			}
+			_, _ = writer.Write([]byte(`{"status":"ok"}`))
+			return
+		}
+		writer.Header().Set("Location", request.URL.Path+"?redirected=true")
+		writer.WriteHeader(http.StatusTemporaryRedirect)
+	}))
+	defer server.Close()
+
+	client := NewClient(server.URL, server.Client())
+	response, err := client.Call(context.Background(), CallRequest{
+		Procedure: "chill.v4.UserService/GetUserProfile",
+		AuthMode:  AuthUser,
+		AuthToken: "test-token",
+	})
+	if err != nil {
+		t.Fatalf("Call() error = %v", err)
+	}
+	if string(response.Body) != `{"status":"ok"}` {
+		t.Fatalf("Body = %s", response.Body)
 	}
 }
 
