@@ -177,8 +177,6 @@ func TestCallRPCAbortsBlockedServerWithTimeout(t *testing.T) {
 }
 
 func TestActiveProfileUsesDevDefaultForDevBuilds(t *testing.T) {
-	t.Parallel()
-
 	original := currentBuildInfo
 	currentBuildInfo = func() buildinfo.Info {
 		return buildinfo.Info{Version: "dev", Commit: "test", BuildDate: "test"}
