@@ -18,7 +18,8 @@ Use this reference when the task is about authentication, profile selection, or 
 - Localhost callback flow: `chilly auth login --local-browser`
 - Localhost callback flow without auto-open: `chilly auth login --local-browser --no-browser`
 - Preview hosted web token URL: `chilly auth login --dry-run --output json`
-- Preview token login from stdin JSON: feed `chilly auth login --json @- --dry-run --output json` from a secret manager or another source that does not place the token in command arguments
+- Preview token login from stdin JSON: `printf '{"token":"token-from-setup","skip_verify":true}' | chilly auth login --json @- --dry-run --output json`
+- For unattended workflows, feed the same JSON shape from a secret manager or another source that does not place credentials in command arguments.
 - Logout: `chilly auth logout --output json`
 - Preview logout: `chilly auth logout --dry-run --output json`
 - Verify current auth: `chilly whoami --output json`
