@@ -37,27 +37,30 @@ fi
 
 gofmt_files=''
 goimports_files=''
+gofmt_tmp=''
+goimports_tmp=''
+cleanup_fmt_check() {
+  rm -f "$gofmt_tmp" "$goimports_tmp"
+}
+trap cleanup_fmt_check EXIT
+gofmt_tmp="$(mktemp "${TMPDIR:-/tmp}/chilly-fmt-gofmt.XXXXXX")"
+goimports_tmp="$(mktemp "${TMPDIR:-/tmp}/chilly-fmt-goimports.XXXXXX")"
+
 printf '%s\n' "$go_files" | while IFS= read -r file; do
   [ -n "$file" ] || continue
   [ -f "$file" ] || continue
   gofmt_output="$(gofmt -l "$file")"
   if [ -n "$gofmt_output" ]; then
-    printf '%s\n' "$gofmt_output" >> .git/.fmt-gofmt.tmp
+    printf '%s\n' "$gofmt_output" >> "$gofmt_tmp"
   fi
   goimports_output="$(go tool goimports -l "$file")"
   if [ -n "$goimports_output" ]; then
-    printf '%s\n' "$goimports_output" >> .git/.fmt-goimports.tmp
+    printf '%s\n' "$goimports_output" >> "$goimports_tmp"
   fi
 done
 
-if [ -f .git/.fmt-gofmt.tmp ]; then
-  gofmt_files="$(cat .git/.fmt-gofmt.tmp)"
-  rm -f .git/.fmt-gofmt.tmp
-fi
-if [ -f .git/.fmt-goimports.tmp ]; then
-  goimports_files="$(cat .git/.fmt-goimports.tmp)"
-  rm -f .git/.fmt-goimports.tmp
-fi
+gofmt_files="$(cat "$gofmt_tmp")"
+goimports_files="$(cat "$goimports_tmp")"
 
 if [ -z "$gofmt_files" ] && [ -z "$goimports_files" ]; then
   printf '==> Go formatting is clean\n'
