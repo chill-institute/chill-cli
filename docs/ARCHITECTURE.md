@@ -218,6 +218,7 @@ In default pretty mode, the core read commands render small human-oriented summa
 - `Main` runs GoReleaser to publish GitHub release artifacts and update the Homebrew tap
 - `Main` prepares npm package directories from GoReleaser binaries and publishes `@chill-institute/cli`; the installed binary remains `chilly`
 - npm publishing uses trusted OIDC publishing from the `release` Environment
+- release jobs run on GitHub-hosted Ubuntu runners so npm trusted publishing can issue supported provenance; dedicated verification jobs stay on Blacksmith
 - the tag-based `Release` workflow remains available as a GitHub release and Homebrew fallback path
 
 ## Browser Auth Flow
