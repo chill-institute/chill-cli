@@ -3,8 +3,7 @@ updates:
   - package-ecosystem: github-actions
     directory: "/"
     schedule:
-      interval: weekly
-      day: monday
+      interval: monthly
     groups:
       actions-patch-minor:
         update-types: ["patch", "minor"]
@@ -16,8 +15,7 @@ updates:
   - package-ecosystem: gomod
     directory: "/"
     schedule:
-      interval: weekly
-      day: monday
+      interval: monthly
     groups:
       gomod-patch-minor:
         update-types: ["patch", "minor"]
