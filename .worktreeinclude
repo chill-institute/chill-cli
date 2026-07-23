@@ -1,0 +1,2 @@
+# Ignored local configuration copied by Codex and Claude managed worktrees.
+.env.local

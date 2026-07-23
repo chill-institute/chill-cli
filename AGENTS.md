@@ -23,6 +23,11 @@ For command-surface changes, also run:
 
 - `go run ./cmd/chilly <command> --help`
 
+## Worktrees
+
+- Managed Codex and Claude worktrees copy the optional hosted-integration `.env.local` through `.worktreeinclude`; `mise run test:integration` loads it automatically.
+- Standard development needs no secrets. Obtain live user tokens through the normal CLI authentication flow, not the shared Infisical development inventory.
+
 ## Conventions
 
 - Prefer machine-readable contracts first. New behavior should have a stable JSON story before nicer human formatting.

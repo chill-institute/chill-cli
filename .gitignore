@@ -2,3 +2,7 @@
 /chilly
 coverage.out
 dist/
+.env.local
+
+# Claude Code managed worktrees
+.claude/worktrees/

@@ -122,6 +122,11 @@ run = "go test ./..."
 [tasks."test:integration"]
 description = "Run opt-in live integration tests against a real API surface"
 run = """
+if [ -f .env.local ]; then
+  set -a
+  . ./.env.local
+  set +a
+fi
 if [ -z "${CHILLY_TEST_API_URL:-}" ] || [ -z "${CHILLY_TEST_TOKEN:-}" ]; then
   printf 'CHILLY_TEST_API_URL and CHILLY_TEST_TOKEN are required for integration tests\n' >&2
   exit 1
