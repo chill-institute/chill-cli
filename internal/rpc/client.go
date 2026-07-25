@@ -13,6 +13,8 @@ import (
 	"strings"
 	"time"
 	"unicode"
+
+	"github.com/chill-institute/chill-cli/internal/buildinfo"
 )
 
 const (
@@ -21,6 +23,8 @@ const (
 	DefaultClientTimeout          = 20 * time.Second
 	maxResponseBodyBytes          = 32 << 20
 	maxErrorBodyBytes             = 64 << 10
+	clientNameHeader              = "X-Chill-Client"
+	clientVersionHeader           = "X-Chill-Client-Version"
 )
 
 var errResponseBodyTooLarge = errors.New("rpc response body exceeds limit")
@@ -32,6 +36,7 @@ type Client struct {
 	httpClient        *http.Client
 	responseBodyLimit int64
 	errorBodyLimit    int64
+	clientVersion     string
 }
 
 type CallRequest struct {
@@ -87,6 +92,7 @@ func NewClient(baseURL string, httpClient *http.Client) *Client {
 		httpClient:        prepareHTTPClient(httpClient),
 		responseBodyLimit: maxResponseBodyBytes,
 		errorBodyLimit:    maxErrorBodyBytes,
+		clientVersion:     buildinfo.Current().Version,
 	}
 }
 
@@ -157,6 +163,8 @@ func (client Client) Call(ctx context.Context, req CallRequest) (CallResponse, e
 	httpRequest.Header.Set("Content-Type", "application/json")
 	httpRequest.Header.Set("Accept", "application/json")
 	httpRequest.Header.Set("X-Request-Id", newRequestID())
+	httpRequest.Header.Set(clientNameHeader, "cli")
+	httpRequest.Header.Set(clientVersionHeader, client.clientVersion)
 
 	if err := applyAuth(httpRequest, req.AuthMode, req.AuthToken); err != nil {
 		return CallResponse{}, err
