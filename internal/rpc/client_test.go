@@ -173,6 +173,12 @@ func TestCallUserAuthAndRequestBody(t *testing.T) {
 		if request.Header.Get("X-Request-Id") == "" {
 			t.Fatal("expected X-Request-Id header")
 		}
+		if got := request.Header.Get("X-Chill-Client"); got != "cli" {
+			t.Fatalf("X-Chill-Client = %q, want cli", got)
+		}
+		if got := request.Header.Get("X-Chill-Client-Version"); got != "dev" {
+			t.Fatalf("X-Chill-Client-Version = %q, want dev", got)
+		}
 
 		var payload map[string]any
 		if err := json.NewDecoder(request.Body).Decode(&payload); err != nil {

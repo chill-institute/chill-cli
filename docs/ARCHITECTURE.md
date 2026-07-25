@@ -108,6 +108,8 @@ The current client is intentionally lightweight:
 - it sends HTTP POST requests directly to `/v4/{procedure}`
 - it supports `none` and `user` auth modes
 - it adds `X-Request-Id` for tracing
+- it identifies requests as `cli` through `X-Chill-Client`
+- it sends the binary build version through `X-Chill-Client-Version`
 - it parses the shared error envelope into `APIError`
 
 This repo does not yet consume generated RPC bindings directly. It currently uses a manual procedure-oriented client.
