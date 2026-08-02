@@ -26,7 +26,8 @@ For command-surface changes, also run:
 ## Worktrees
 
 - Managed Codex and Claude worktrees copy the optional hosted-integration `.env.local` through `.worktreeinclude`; `mise run test:integration` loads it automatically.
-- Standard development needs no secrets. Obtain live user tokens through the normal CLI authentication flow, not the shared Infisical development inventory.
+- Use the normal CLI authentication flow when live integration work needs a
+  user token; standard development and tests need no shared secret inventory.
 
 ## Conventions
 
