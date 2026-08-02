@@ -113,7 +113,6 @@ Released binaries use the `default` profile. Dev builds default to `dev` so sour
 
 - [Architecture](./docs/ARCHITECTURE.md): command shape, transport, config, skills, and release flow
 - [Security](./SECURITY.md): local credential and network safety notes
-- [Contributing](./CONTRIBUTING.md): setup, validation, and release workflow
 
 ## Contributing
 

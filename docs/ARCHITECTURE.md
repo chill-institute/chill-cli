@@ -27,40 +27,10 @@ graph LR
 
 ## Command Model
 
-```mermaid
-graph TD
-  Root["chilly"] --> Auth["auth"]
-  Root --> Completion["completion"]
-  Root --> Schema["schema"]
-  Root --> Doctor["doctor"]
-  Root --> Whoami["whoami"]
-  Root --> Settings["settings"]
-  Root --> Search["search"]
-  Root --> Movies["movies"]
-  Root --> TVShows["tv-shows"]
-  Root --> Transfer["add-transfer"]
-  Root --> User["user"]
-  Root --> Version["version"]
-  Root --> SelfUpdate["self-update"]
-```
-
-Current command groups:
-
-| Command | Responsibility |
-|---------|----------------|
-| `auth` | login/logout and token acquisition |
-| `completion` | generate shell completion scripts |
-| `schema` | inspect local command and procedure metadata |
-| `doctor` | inspect build, config, API host, and auth health |
-| `whoami` | verify current auth state |
-| `settings` | inspect and update local CLI config |
-| `search` | run search against the hosted API |
-| `movies` | fetch movie data using the current user settings |
-| `tv-shows` | fetch TV show data and TV show download lookups using the current user settings |
-| `add-transfer` | send transfer requests |
-| `user` | user-scoped API operations such as profile aliases, settings, folders, indexers, search, and transfer add namespacing |
-| `version` | expose build metadata and release provenance |
-| `self-update` | install a released binary over the current executable |
+The Cobra command layer groups authentication, diagnostics, settings, discovery,
+catalog, search, and transfer workflows. `chilly --help` is the canonical human
+listing; `chilly schema` and `chilly <command> --describe` expose the same command
+and procedure contracts for agents.
 
 ## Local State
 
@@ -112,7 +82,7 @@ The current client is intentionally lightweight:
 - it sends the binary build version through `X-Chill-Client-Version`
 - it parses the shared error envelope into `APIError`
 
-This repo does not yet consume generated RPC bindings directly. It currently uses a manual procedure-oriented client.
+The RPC client is a manual, procedure-oriented transport rather than a generated binding.
 
 ## Introspection Model
 
@@ -136,7 +106,7 @@ That registry is the source of truth for:
 - current `--dry-run` support for mutating commands
 - current `--fields` support for read commands and schema surfaces
 
-The current milestone does not fetch schema dynamically from the API. Discovery is explicit and local to the CLI repo.
+Discovery is explicit and local to the CLI repo through the metadata registry.
 
 ## Agent Knowledge Packaging
 
@@ -162,12 +132,12 @@ This keeps the top-level skill stable while letting agents load only the workflo
 - `internal/update`: reusable GitHub release lookup and binary replacement logic
 - `scripts/`: install helpers shipped with the repo
 
-This keeps CLI command glue separate from reusable transport and release modules so future SDK or MCP extraction does not need to unwind command-specific concerns.
+This keeps CLI command glue separate from reusable transport and release modules.
 
 ## Boundaries
 
-- Local config is the only persistent state in this repo.
-- The CLI does not embed backend behavior. It delegates to the hosted API.
+- Local config is the CLI's persistent state.
+- The hosted API owns product behavior; the CLI owns local validation, transport, and rendering.
 - Auth is bearer-token based for user-scoped commands.
 
 ## Output And Error Contract
@@ -191,7 +161,7 @@ For supported mutating commands, `--dry-run` validates local input and writes a 
 - full JSON request bodies with `--json`, including `--json @-` to read from stdin
 - one-field patch mode that fetches current settings, merges a validated patch, and saves the full object back through the existing RPC
 
-For supported read commands, `--fields` applies a client-side field mask to the JSON response before rendering it to `stdout`. The main agent-facing read surfaces now include `search`, `whoami`, `movies`, `tv-shows`, `tv-shows detail`, `tv-shows season`, `tv-shows episode-download`, `tv-shows season-downloads`, `doctor`, `get-transfer`, `user settings get`, `user profile`, `user search`, `user movies`, `user tv-shows`, `user transfer get`, `user indexers`, `user download-folder`, `user folder get`, `settings path`, `settings show`, `settings get`, `version`, `schema`, `schema command`, and `schema procedure`
+Read commands that declare field-selection support apply `--fields` as a client-side mask before rendering JSON. Use `chilly schema command <name> --output json` to inspect the current capability instead of relying on a copied command list.
 
 Schema type metadata is available through `schema type`. Field masks accept exact JSON field names and protobuf snake_case aliases, so `results.release_info.bit_depth` selects the JSON field `results.releaseInfo.bitDepth`.
 
@@ -221,13 +191,12 @@ In default pretty mode, the core read commands render small human-oriented summa
 - `Main` prepares npm package directories from GoReleaser binaries and publishes `@chill-institute/cli`; the installed binary remains `chilly`
 - npm publishing uses trusted OIDC publishing from the `release` Environment
 - release jobs run on GitHub-hosted Ubuntu runners so npm trusted publishing can issue supported provenance; dedicated verification jobs stay on Blacksmith
-- the tag-based `Release` workflow remains available as a GitHub release and Homebrew fallback path
+- operators can dispatch the tag-based `Release` workflow for GitHub release and Homebrew artifact recovery
 
 ## Browser Auth Flow
 
-Interactive login defaults to a terminal-first hosted web token page,
-with the localhost callback flow available only as an explicit
-opt-in:
+Interactive login uses a terminal-first hosted web token page. Desktop users can
+opt into the localhost callback with `auth login --local-browser`.
 
 ```mermaid
 sequenceDiagram
@@ -246,4 +215,6 @@ sequenceDiagram
   CLI->>CLI: persist auth token in config store
 ```
 
-The CLI talks directly to the API for both token verification and all user-scoped RPCs. The browser is now only used to obtain a setup token from the hosted app, and the default UX is explicitly a copy/paste token handoff. The localhost callback server remains available behind `auth login --local-browser` for desktop convenience, but it is no longer the default contract.
+The CLI talks directly to the API for token verification and user-scoped RPCs.
+The default browser step obtains a setup token from the hosted app for the user
+to paste into the terminal.
