@@ -55,6 +55,39 @@ func TestRunAddTransferDryRunSkipsAuthAndReturnsPreview(t *testing.T) {
 	if request["url"] != "magnet:?xt=urn:btih:dryrun" {
 		t.Fatalf("request.url = %v, want %q", request["url"], "magnet:?xt=urn:btih:dryrun")
 	}
+	if _, ok := request["catalogOrigin"]; ok {
+		t.Fatalf("request.catalogOrigin = %#v, want omitted", request["catalogOrigin"])
+	}
+}
+
+func TestRunAddTransferDryRunIncludesCatalogOrigin(t *testing.T) {
+	t.Parallel()
+
+	stdout := &bytes.Buffer{}
+	exitCode := Run([]string{
+		"--config", filepath.Join(t.TempDir(), "config.json"),
+		"add-transfer",
+		"--url", "magnet:?xt=urn:btih:dryrun",
+		"--movie-source", "trakt",
+		"--dry-run",
+		"--output", "json",
+	}, strings.NewReader(""), stdout, &bytes.Buffer{})
+	if exitCode != int(exitCodeSuccess) {
+		t.Fatalf("exitCode = %d, want %d", exitCode, exitCodeSuccess)
+	}
+
+	var output map[string]any
+	if err := json.Unmarshal(stdout.Bytes(), &output); err != nil {
+		t.Fatalf("json.Unmarshal(stdout) error = %v", err)
+	}
+	request, ok := output["request"].(map[string]any)
+	if !ok {
+		t.Fatalf("request = %#v, want object", output["request"])
+	}
+	catalogOrigin, ok := request["catalogOrigin"].(map[string]any)
+	if !ok || catalogOrigin["moviesSource"] != "MOVIES_SOURCE_TRAKT" {
+		t.Fatalf("catalogOrigin = %#v", request["catalogOrigin"])
+	}
 }
 
 func TestRunAddTransferDryRunAcceptsJSONPayloadFromStdin(t *testing.T) {
@@ -69,7 +102,7 @@ func TestRunAddTransferDryRunAcceptsJSONPayloadFromStdin(t *testing.T) {
 		"--json", "@-",
 		"--dry-run",
 		"--output", "json",
-	}, strings.NewReader(`{"url":"magnet:?xt=urn:btih:stdin"}`), stdout, stderr)
+	}, strings.NewReader(`{"url":"magnet:?xt=urn:btih:stdin","catalogOrigin":{"moviesSource":"MOVIES_SOURCE_TRAKT"}}`), stdout, stderr)
 	if exitCode != int(exitCodeSuccess) {
 		t.Fatalf("exitCode = %d, want %d", exitCode, exitCodeSuccess)
 	}
@@ -87,6 +120,10 @@ func TestRunAddTransferDryRunAcceptsJSONPayloadFromStdin(t *testing.T) {
 	}
 	if request["url"] != "magnet:?xt=urn:btih:stdin" {
 		t.Fatalf("request.url = %v, want %q", request["url"], "magnet:?xt=urn:btih:stdin")
+	}
+	catalogOrigin, ok := request["catalogOrigin"].(map[string]any)
+	if !ok || catalogOrigin["moviesSource"] != "MOVIES_SOURCE_TRAKT" {
+		t.Fatalf("catalogOrigin = %#v", request["catalogOrigin"])
 	}
 }
 

@@ -54,6 +54,7 @@ Prefer explicit output formats and narrow fields when another program will read 
 chilly search --query "dune" --fields results.title,results.release_info.bit_depth --output ndjson
 chilly version --fields version --output json
 chilly add-transfer --url "magnet:?xt=urn:btih:..." --dry-run --output json
+chilly add-transfer --url "magnet:?xt=urn:btih:..." --movie-source trakt --dry-run --output json
 printf '{"url":"magnet:?xt=urn:btih:..."}' | chilly add-transfer --json @- --dry-run --output json
 printf '{"key":"api-base-url","value":"https://api.chill.institute"}' | chilly settings set --json @- --dry-run --output json
 chilly schema command search --fields id,linked_procedure --output json

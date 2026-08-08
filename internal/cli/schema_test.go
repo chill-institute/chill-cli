@@ -195,11 +195,13 @@ func TestSchemaCommandAddTransferReturnsInputModes(t *testing.T) {
 
 	assertInputNotUnconditionallyRequired(t, output, "url")
 	assertInputNotUnconditionallyRequired(t, output, "json")
+	assertInputNotUnconditionallyRequired(t, output, "movie-source")
+	assertInputNotUnconditionallyRequired(t, output, "tv-source")
 	assertInputModes(t, output, []schemaInputMode{
 		{
 			Name:        "url",
-			Description: "Build the request from --url.",
-			Inputs:      []string{"url"},
+			Description: "Build the request from --url with an optional movie or TV source.",
+			Inputs:      []string{"url", "movie-source", "tv-source"},
 			Required:    []string{"url"},
 		},
 		{
@@ -209,6 +211,32 @@ func TestSchemaCommandAddTransferReturnsInputModes(t *testing.T) {
 			Required:    []string{"json"},
 		},
 	})
+}
+
+func TestAddTransferSchemasExposeCatalogOrigin(t *testing.T) {
+	t.Parallel()
+
+	for _, commandID := range []string{"add-transfer", "user transfer add"} {
+		entry := commandSchemaForTest(t, commandID)
+		assertInputNotUnconditionallyRequired(t, entry, "movie-source")
+		assertInputNotUnconditionallyRequired(t, entry, "tv-source")
+	}
+
+	procedure := procedureSchemaRegistry[procedureUserAddTransfer]
+	foundCatalogOrigin := false
+	for _, input := range procedure.Inputs {
+		if input.Name == "catalog_origin" && input.Type == "chill.v4.CatalogOrigin" {
+			foundCatalogOrigin = true
+		}
+	}
+	if !foundCatalogOrigin {
+		t.Fatalf("procedure inputs = %#v, want catalog_origin", procedure.Inputs)
+	}
+
+	catalogOrigin, ok := typeSchemaRegistry["chill.v4.CatalogOrigin"]
+	if !ok || len(catalogOrigin.Fields) != 2 {
+		t.Fatalf("CatalogOrigin schema = %#v", catalogOrigin)
+	}
 }
 
 func TestSchemaCommandSettingsSetReturnsInputModes(t *testing.T) {

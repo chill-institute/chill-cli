@@ -160,17 +160,24 @@ func newUserTransferCommand(app *appContext) *cobra.Command {
 
 	var transferURL string
 	var rawRequest string
+	var movieSource string
+	var tvSource string
 	var dryRun bool
 	addCommand := &cobra.Command{
 		Use:   "add",
 		Short: "Add a transfer through chill.institute",
 		Long:  "Alias for the top-level add-transfer command under the user namespace.",
+		Example: strings.TrimSpace(`
+chilly user transfer add --url "magnet:?xt=urn:btih:..." --tv-source netflix
+`),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runAddTransfer(app, "user transfer add", transferURL, rawRequest, dryRun)
+			return runAddTransfer(app, "user transfer add", transferURL, rawRequest, movieSource, tvSource, dryRun)
 		},
 	}
 	addCommand.Flags().StringVar(&transferURL, "url", "", addTransferURLDescription)
 	addCommand.Flags().StringVar(&rawRequest, "json", "", "raw JSON request body, or @- to read it from stdin")
+	addCommand.Flags().StringVar(&movieSource, "movie-source", "", addTransferMovieSourceDescription)
+	addCommand.Flags().StringVar(&tvSource, "tv-source", "", addTransferTVSourceDescription)
 	addCommand.Flags().BoolVar(&dryRun, "dry-run", false, "validate input and print the request without executing it")
 	transferCommand.AddCommand(addCommand)
 

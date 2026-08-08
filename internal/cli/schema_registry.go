@@ -92,6 +92,8 @@ var commandSchemaRegistry = map[string]schemaEntry{
 		Inputs: appendInputs(
 			schemaInput{Name: "url", Type: "string", Description: addTransferURLFlagDescription + "; use either --url or --json"},
 			schemaInput{Name: "json", Type: "string", Description: "raw JSON request body, or @- to read it from stdin"},
+			schemaInput{Name: "movie-source", Type: "string", Description: addTransferMovieSourceDescription},
+			schemaInput{Name: "tv-source", Type: "string", Description: addTransferTVSourceDescription},
 			schemaInput{Name: "dry-run", Type: "boolean", Description: "validate input and print the request without executing it"},
 		),
 		InputModes: addTransferInputModes(),
@@ -638,6 +640,8 @@ var commandSchemaRegistry = map[string]schemaEntry{
 		Inputs: appendInputs(
 			schemaInput{Name: "url", Type: "string", Description: addTransferURLDescription + "; use either --url or --json"},
 			schemaInput{Name: "json", Type: "string", Description: "raw JSON request body, or @- to read it from stdin"},
+			schemaInput{Name: "movie-source", Type: "string", Description: addTransferMovieSourceDescription},
+			schemaInput{Name: "tv-source", Type: "string", Description: addTransferTVSourceDescription},
 			schemaInput{Name: "dry-run", Type: "boolean", Description: "validate input and print the request without executing it"},
 		),
 		InputModes: addTransferInputModes(),
@@ -692,6 +696,7 @@ var procedureSchemaRegistry = map[string]schemaEntry{
 		Output:         schemaOutput{JSON: true, Type: "chill.v4.AddTransferResponse"},
 		Inputs: []schemaInput{
 			{Name: "url", Type: "string", Required: true, Description: addTransferURLFlagDescription},
+			{Name: "catalog_origin", Type: "chill.v4.CatalogOrigin", Description: "optional typed movie or TV catalog attribution"},
 		},
 	},
 	procedureUserGetIndexers: {
@@ -860,6 +865,15 @@ var typeSchemaRegistry = map[string]schemaType{
 		Fields: []schemaField{
 			schemaFieldFor("status", "string"),
 			schemaFieldFor("transfer", "chill.v4.Transfer"),
+		},
+	},
+	"chill.v4.CatalogOrigin": {
+		ID:      "chill.v4.CatalogOrigin",
+		Kind:    "type",
+		Summary: "Optional movie or TV catalog attribution for a transfer",
+		Fields: []schemaField{
+			optionalSchemaField("movies_source", "string"),
+			optionalSchemaField("tv_shows_source", "string"),
 		},
 	},
 	"chill.v4.CatalogSettings": {
@@ -1336,11 +1350,12 @@ func appendInputs(extra ...schemaInput) []schemaInput {
 
 func addTransferInputModes() []schemaInputMode {
 	return []schemaInputMode{
-		schemaInputModeForRequiredInputs(
-			"url",
-			"Build the request from --url.",
-			"url",
-		),
+		{
+			Name:        "url",
+			Description: "Build the request from --url with an optional movie or TV source.",
+			Inputs:      []string{"url", "movie-source", "tv-source"},
+			Required:    []string{"url"},
+		},
 		schemaInputModeForRequiredInputs(
 			"json",
 			"Use a raw JSON request body from --json.",

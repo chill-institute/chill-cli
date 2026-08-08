@@ -13,8 +13,11 @@ Use this reference for side-effecting commands.
 
 - `add-transfer` accepts `magnet:?` links and `http://` or `https://` URLs with a host. Other schemes, plain strings, control characters, and unescaped whitespace fail locally during dry-run.
 - Preview add-transfer: `chilly add-transfer --url "magnet:?xt=..." --dry-run --output json`
-- Exact request body: `printf '{"url":"magnet:?xt=..."}' | chilly add-transfer --json @- --dry-run --output json`
-- Nested alias: `printf '{"url":"magnet:?xt=..."}' | chilly user transfer add --json @- --dry-run --output json`
+- Attribute a known movie catalog: `chilly add-transfer --url "magnet:?xt=..." --movie-source trakt --dry-run --output json`
+- Attribute a known TV catalog: `chilly add-transfer --url "magnet:?xt=..." --tv-source netflix --dry-run --output json`
+- `--movie-source` and `--tv-source` are mutually exclusive and cannot be combined with `--json`. Omit both for a direct or generic-search send.
+- Exact request body: `printf '{"url":"magnet:?xt=...","catalogOrigin":{"moviesSource":"MOVIES_SOURCE_TRAKT"}}' | chilly add-transfer --json @- --dry-run --output json`
+- Nested alias: `chilly user transfer add --url "magnet:?xt=..." --tv-source netflix --dry-run --output json`
 
 ## Hosted Settings Mutations
 

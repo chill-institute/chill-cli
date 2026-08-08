@@ -20,7 +20,7 @@ func TestBuildAddTransferRequest(t *testing.T) {
 		stderr: &strings.Builder{},
 	}
 
-	request, err := buildAddTransferRequest(app, " magnet:?xt=urn:btih:test ", "")
+	request, err := buildAddTransferRequest(app, " magnet:?xt=urn:btih:test ", "", "", "")
 	if err != nil {
 		t.Fatalf("buildAddTransferRequest(flags) error = %v", err)
 	}
@@ -28,20 +28,48 @@ func TestBuildAddTransferRequest(t *testing.T) {
 		t.Fatalf("request = %#v", request)
 	}
 
-	request, err = buildAddTransferRequest(app, "", `{"url":" magnet:?xt=urn:btih:test "}`)
+	request, err = buildAddTransferRequest(app, "", `{"url":" magnet:?xt=urn:btih:test ","catalogOrigin":{"moviesSource":"MOVIES_SOURCE_TRAKT"}}`, "", "")
 	if err != nil {
 		t.Fatalf("buildAddTransferRequest(json) error = %v", err)
 	}
 	if request["url"] != "magnet:?xt=urn:btih:test" {
 		t.Fatalf("request = %#v", request)
 	}
+	catalogOrigin, ok := request["catalogOrigin"].(map[string]any)
+	if !ok || catalogOrigin["moviesSource"] != "MOVIES_SOURCE_TRAKT" {
+		t.Fatalf("catalogOrigin = %#v", request["catalogOrigin"])
+	}
+
+	request, err = buildAddTransferRequest(app, "magnet:?xt=urn:btih:test", "", "trakt", "")
+	if err != nil {
+		t.Fatalf("buildAddTransferRequest(movie source) error = %v", err)
+	}
+	catalogOrigin, ok = request["catalogOrigin"].(map[string]any)
+	if !ok || catalogOrigin["moviesSource"] != "MOVIES_SOURCE_TRAKT" {
+		t.Fatalf("catalogOrigin = %#v", request["catalogOrigin"])
+	}
+
+	request, err = buildAddTransferRequest(app, "magnet:?xt=urn:btih:test", "", "", "Netflix")
+	if err != nil {
+		t.Fatalf("buildAddTransferRequest(tv source) error = %v", err)
+	}
+	catalogOrigin, ok = request["catalogOrigin"].(map[string]any)
+	if !ok || catalogOrigin["tvShowsSource"] != "TV_SHOWS_SOURCE_NETFLIX" {
+		t.Fatalf("catalogOrigin = %#v", request["catalogOrigin"])
+	}
 
 	for _, tc := range []struct {
 		name        string
 		transferURL string
 		rawRequest  string
+		movieSource string
+		tvSource    string
 	}{
 		{name: "ambiguous", transferURL: "magnet:?xt=urn:btih:test", rawRequest: `{"url":"magnet:?xt=urn:btih:test"}`},
+		{name: "json with movie source", rawRequest: `{"url":"magnet:?xt=urn:btih:test"}`, movieSource: "trakt"},
+		{name: "both sources", transferURL: "magnet:?xt=urn:btih:test", movieSource: "trakt", tvSource: "netflix"},
+		{name: "invalid movie source", transferURL: "magnet:?xt=urn:btih:test", movieSource: "not-real"},
+		{name: "invalid tv source", transferURL: "magnet:?xt=urn:btih:test", tvSource: "not-real"},
 		{name: "json missing url", rawRequest: `{"id":"nope"}`},
 		{name: "json invalid url type", rawRequest: `{"url":true}`},
 	} {
@@ -49,7 +77,7 @@ func TestBuildAddTransferRequest(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			if _, err := buildAddTransferRequest(app, tc.transferURL, tc.rawRequest); err == nil {
+			if _, err := buildAddTransferRequest(app, tc.transferURL, tc.rawRequest, tc.movieSource, tc.tvSource); err == nil {
 				t.Fatalf("buildAddTransferRequest(%s) error = nil, want error", tc.name)
 			}
 		})
