@@ -872,8 +872,8 @@ var typeSchemaRegistry = map[string]schemaType{
 		Kind:    "type",
 		Summary: "Optional movie or TV catalog attribution for a transfer",
 		Fields: []schemaField{
-			optionalSchemaField("movies_source", "string"),
-			optionalSchemaField("tv_shows_source", "string"),
+			schemaFieldFor("movies_source", "string"),
+			schemaFieldFor("tv_shows_source", "string"),
 		},
 	},
 	"chill.v4.CatalogSettings": {
