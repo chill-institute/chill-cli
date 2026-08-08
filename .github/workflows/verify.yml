@@ -27,7 +27,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: chill-institute/chill-contracts
-          ref: b4223966fe5fdf708c2073f575947a3535b006f0 # main
+          ref: b30dd8ab849921f4146b249a405e44c7fcf6d917 # v2.3.0
           path: .contracts/chill-contracts
           persist-credentials: false
 

@@ -29,6 +29,10 @@ func TestUserTransferAddUsesStoredToken(t *testing.T) {
 		if payload["url"] != "magnet:?xt=urn:btih:123" {
 			t.Fatalf("url = %v", payload["url"])
 		}
+		catalogOrigin, ok := payload["catalogOrigin"].(map[string]any)
+		if !ok || catalogOrigin["tvShowsSource"] != "TV_SHOWS_SOURCE_NETFLIX" {
+			t.Fatalf("catalogOrigin = %#v", payload["catalogOrigin"])
+		}
 		_, _ = writer.Write([]byte(`{"status":"queued"}`))
 	}))
 	defer server.Close()
@@ -49,7 +53,7 @@ func TestUserTransferAddUsesStoredToken(t *testing.T) {
 		stdout: stdout,
 		stderr: &bytes.Buffer{},
 	})
-	command.SetArgs([]string{"transfer", "add", "--url", "magnet:?xt=urn:btih:123"})
+	command.SetArgs([]string{"transfer", "add", "--url", "magnet:?xt=urn:btih:123", "--tv-source", "netflix"})
 	if err := command.Execute(); err != nil {
 		t.Fatalf("Execute() error = %v", err)
 	}

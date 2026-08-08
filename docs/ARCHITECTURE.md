@@ -102,7 +102,7 @@ That registry is the source of truth for:
 - `chilly <command> --describe`
 - canonical-vs-alias metadata for overlapping top-level and nested commands
 - raw request-body support such as `add-transfer --json @-`, `auth login --json @-`, `settings set --json @-`, and `self-update --json`
-- mutually exclusive command input modes such as `add-transfer --url` vs `add-transfer --json`, and `settings set <key> <value>` vs `settings set --json`
+- mutually exclusive command input modes such as `add-transfer --url [--movie-source|--tv-source]` vs `add-transfer --json`, and `settings set <key> <value>` vs `settings set --json`
 - current `--dry-run` support for mutating commands
 - current `--fields` support for read commands and schema surfaces
 
@@ -151,7 +151,7 @@ This keeps CLI command glue separate from reusable transport and release modules
 
 For supported mutating commands, `--dry-run` validates local input and writes a deterministic request or config-change preview to `stdout` without mutating local state, loading auth, or calling the API.
 
-`add-transfer`, `auth login`, `settings set`, and `self-update` accept two request styles:
+`add-transfer`, `auth login`, `settings set`, and `self-update` accept two request styles. `add-transfer` may pair its URL mode with one typed catalog source flag; JSON mode carries the exact request body:
 
 - convenience flags such as `--url`, `--token`, `--check`, or positional key/value arguments
 - raw JSON request bodies with `--json`, including `--json @-` to read from stdin when a pipeline is easier than shell-escaping
