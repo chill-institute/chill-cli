@@ -36,7 +36,7 @@ func rootPackage(version string) packageJSON {
 		optionalDependencies[platformPackageName(t)] = version
 	}
 
-	pkg := basePackage(rootPackageName, version, "Agent-first command-line client for chill.institute")
+	pkg := basePackage(rootPackageName, version, "Search chill.institute and send transfers from the terminal")
 	pkg.Bin = map[string]string{binaryName: "bin/chilly.js"}
 	pkg.Files = []string{"bin"}
 	pkg.Keywords = []string{"chill.institute", "cli", "chilly"}
