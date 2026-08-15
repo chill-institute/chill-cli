@@ -17,21 +17,17 @@ Use this reference for side-effecting commands.
 - Attribute a known TV catalog: `chilly add-transfer --url "magnet:?xt=..." --tv-source netflix --dry-run --output json`
 - `--movie-source` and `--tv-source` are mutually exclusive and cannot be combined with `--json`. Omit both for a direct or generic-search send.
 - Exact request body: `printf '{"url":"magnet:?xt=...","catalogOrigin":{"moviesSource":"MOVIES_SOURCE_TRAKT"}}' | chilly add-transfer --json @- --dry-run --output json`
-- Nested alias: `chilly user transfer add --url "magnet:?xt=..." --tv-source netflix --dry-run --output json`
 
 ## Hosted Settings Mutations
 
 - Exact full replacement body: `printf '{"settings":{"search":{"filterNastyResults":true,"filterResultsWithNoSeeders":false,"rememberQuickFilters":false,"disabledIndexerIds":[],"resolutionFilters":[],"codecFilters":[],"otherFilters":[],"sortBy":"SORT_BY_SEEDERS","sortDirection":"SORT_DIRECTION_DESC","searchResultDisplayBehavior":"SEARCH_RESULT_DISPLAY_BEHAVIOR_FASTEST","searchResultTitleBehavior":"SEARCH_RESULT_TITLE_BEHAVIOR_TEXT"},"catalog":{"moviesSource":"MOVIES_SOURCE_YTS","tvShowsSource":"TV_SHOWS_SOURCE_ALL_PROVIDERS"},"download":{"folderId":42}}}' | chilly user settings set --json @- --dry-run --output json`
-- Bare full settings shorthand: `printf '{"search":{"filterNastyResults":true,"filterResultsWithNoSeeders":false,"rememberQuickFilters":false,"disabledIndexerIds":[],"resolutionFilters":[],"codecFilters":[],"otherFilters":[],"sortBy":"SORT_BY_SEEDERS","sortDirection":"SORT_DIRECTION_DESC","searchResultDisplayBehavior":"SEARCH_RESULT_DISPLAY_BEHAVIOR_FASTEST","searchResultTitleBehavior":"SEARCH_RESULT_TITLE_BEHAVIOR_TEXT"},"catalog":{"moviesSource":"MOVIES_SOURCE_YTS","tvShowsSource":"TV_SHOWS_SOURCE_ALL_PROVIDERS"},"download":{"folderId":42}}' | chilly user settings set --json @- --dry-run --output json`
 - TV provider browsing is per-request now. Prefer `chilly tv-shows --source <provider>` for reads; patch `catalog.tvShowsSource` only when explicitly managing persisted settings compatibility.
 - One-field patch: `chilly user settings set sort-by title --dry-run --output json`
 
 ## Download Folder Mutations
 
 - Patch by ID: `chilly user download-folder set 42 --dry-run --output json`
-- Exact request body: `printf '{"download":{"folderId":42}}' | chilly user download-folder set --json @- --dry-run --output json`
 - Clear by patch: `chilly user download-folder clear --dry-run --output json`
-- Clear by request body: `printf '{"settings":{"download":{"folderId":null}}}' | chilly user download-folder clear --json @- --dry-run --output json`
 
 ## Local Mutations
 

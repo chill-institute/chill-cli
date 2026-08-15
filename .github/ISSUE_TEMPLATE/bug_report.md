@@ -5,26 +5,19 @@ title: "[bug] "
 labels: bug
 ---
 
-## Summary
+## Command
 
-What happened, and what did you expect instead?
+```bash
+chilly ...
+```
 
-## Reproduction
+## Result
 
-1. Command:
-   ```bash
-   chilly ...
-   ```
-2. Input or flags:
-3. Observed output:
+What happened? What should have happened instead? Include sanitized JSON output
+or reproduction steps.
 
 ## Environment
 
-- CLI version: `chilly version --output json`
+- Version: `chilly version --output json`
 - Install method: npm / brew / install.sh / source
 - OS and architecture:
-
-## Validation
-
-- [ ] `mise run verify`
-- [ ] I checked whether the issue reproduces on the latest release

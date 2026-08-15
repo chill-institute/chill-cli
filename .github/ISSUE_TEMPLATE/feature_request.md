@@ -5,18 +5,10 @@ title: "[feature] "
 labels: enhancement
 ---
 
-## Summary
+## Workflow
 
-What should the CLI do?
+What should become possible, and for whom?
 
-## Why
+## Command contract
 
-What workflow does this unblock for humans or agents?
-
-## Proposed shape
-
-Suggested command, flags, output, or safety constraints.
-
-## Notes
-
-Anything else maintainers should know.
+Suggest a command, flags, JSON shape, or safety boundary if useful.

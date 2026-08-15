@@ -1,13 +1,11 @@
-## Summary
+## Command change
 
-Describe the change and why it matters.
+<!-- What behavior or contract changed? -->
 
-## Validation
+## Proof
 
-- [ ] `mise run verify`
-- [ ] Runtime sanity check completed for changed command surfaces
-- [ ] Docs and `skills/chilly-cli/` updated when user-facing behavior changed
+<!-- Tests, help/schema output, or runtime evidence. -->
 
-## Risks
+## Compatibility
 
-Call out anything reviewers should watch closely.
+<!-- Output, auth, install, or migration concerns. Remove if none. -->

@@ -1,47 +1,37 @@
 # CLI
 
-`cli` is the `chill.institute` command-line client. Treat it as an agent-first SDK surface with a human CLI on top.
+`chilly` is a human CLI and agent-facing SDK for `chill.institute`.
 
-## Stack
+## Work
 
-- Go with Cobra for commands
-- manual HTTP RPC client for the hosted API
-- local config store for auth token and API base URL
-- `mise` for shared repo tasks
+```bash
+mise install
+mise run hooks
+mise run smoke
+mise run verify
+```
 
-## Commands
+For command changes, also inspect `go run ./cmd/chilly <command> --help`.
+Hosted integration tests are opt-in through `mise run test:integration`.
 
-- `go build ./cmd/chilly`
-- `go run ./cmd/chilly version --output json`
-- `go test ./...`
-- `mise run smoke`
-- `mise run verify`
-- `mise run fmt`
-- `mise run coverage:report`
+## Contracts
 
-For command-surface changes, also run:
+- Preserve stable JSON before refining terminal presentation.
+- Piped results default to compact JSON unless `--output` is explicit.
+- Keep command results on `stdout`; prompts and diagnostics belong on `stderr`.
+- Validate opaque IDs, URLs, procedure names, and filesystem input locally.
+- Preview mutations with `--dry-run` where the command supports it.
+- Keep indexer health tri-state: `healthy`, `degraded`, or `down`.
+- Update [the bundled skill](./skills/chilly-cli/SKILL.md) with command, auth,
+  default, or output-contract changes.
 
-- `go run ./cmd/chilly <command> --help`
+## Ownership
 
-## Worktrees
+- Cobra commands and orchestration: `internal/cli/`
+- Local profiles and credentials: `internal/config/`
+- API transport and error mapping: `internal/rpc/`
+- Release lookup and binary replacement: `internal/update/`
+- Shared tasks and hook behavior: `mise.toml`
 
-- Managed Codex and Claude worktrees copy the optional hosted-integration `.env.local` through `.worktreeinclude`; `mise run test:integration` loads it automatically.
-- Use the normal CLI authentication flow when live integration work needs a
-  user token; standard development and tests need no shared secret inventory.
-
-## Conventions
-
-- Prefer machine-readable contracts first. New behavior should have a stable JSON story before nicer human formatting.
-- When `stdout` is not a TTY and `--output` is not set explicitly, command results default to JSON. Keep that contract stable for agent workflows.
-- Treat the agent as an untrusted operator. New surfaces should validate opaque IDs and base URLs locally before they reach the network or filesystem.
-- Keep `stdout` for command results and `stderr` for prompts, progress, warnings, and recovery hints.
-- Keep auth requirements, flags, and schema/describe surfaces explicit.
-- Treat indexer health as a tri-state contract: `healthy`, `degraded`, and `down`. Do not collapse partially working providers into binary healthy/down wording in new CLI surfaces or docs.
-- Git hooks remain as tiny executable launchers because Git requires hook files, but their behavior should stay in `mise.toml`
-- If a command surface, auth flow, default, or output contract changes, update the user-facing chilly skill library in [skills/](./skills/) in the same pass.
-
-## Read More
-
-- command and transport architecture: [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md)
-- security posture: [SECURITY.md](./SECURITY.md)
-- setup, release flow, and validation: [CONTRIBUTING.md](./CONTRIBUTING.md)
+[Architecture](./docs/ARCHITECTURE.md) · [Contributing](./CONTRIBUTING.md) ·
+[Security](./SECURITY.md)
