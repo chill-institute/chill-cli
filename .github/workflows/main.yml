@@ -224,4 +224,13 @@ jobs:
           RELEASE_TAG: ${{ steps.release_target.outputs.tag }}
         run: |
           gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --draft=false
-          gh release verify "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY"
+          for attempt in {1..12}; do
+            if gh release verify "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY"; then
+              exit 0
+            fi
+            if [[ "$attempt" == 12 ]]; then
+              exit 1
+            fi
+            echo "Release attestation is not available yet; retrying in 5 seconds."
+            sleep 5
+          done
