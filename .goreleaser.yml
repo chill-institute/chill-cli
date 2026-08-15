@@ -58,7 +58,9 @@ release:
   github:
     owner: chill-institute
     name: chill-cli
-  draft: false
+  draft: true
+  use_existing_draft: true
+  replace_existing_artifacts: true
   prerelease: auto
 
 snapshot:

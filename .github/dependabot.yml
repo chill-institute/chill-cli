@@ -4,6 +4,8 @@ updates:
     directory: "/"
     schedule:
       interval: monthly
+    cooldown:
+      default-days: 7
     groups:
       actions-patch-minor:
         update-types: ["patch", "minor"]
@@ -16,6 +18,8 @@ updates:
     directory: "/"
     schedule:
       interval: monthly
+    cooldown:
+      default-days: 7
     groups:
       gomod-patch-minor:
         update-types: ["patch", "minor"]

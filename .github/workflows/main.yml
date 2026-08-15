@@ -20,6 +20,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Set up mise
         uses: jdx/mise-action@9e7f7633ff6f6d6048a9418a68d48f288f50eb14 # v4.2.3
@@ -61,22 +63,70 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Set up mise
         uses: jdx/mise-action@9e7f7633ff6f6d6048a9418a68d48f288f50eb14 # v4.2.3
+        with:
+          cache: false
 
       - name: Tag next release
         id: semantic_release
         uses: cycjimmy/semantic-release-action@b12c8f6015dc215fe37bc154d4ad456dd3833c90 # v6.0.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GIT_AUTHOR_NAME: github-actions[bot]
-          GIT_AUTHOR_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
-          GIT_COMMITTER_NAME: github-actions[bot]
-          GIT_COMMITTER_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
+
+      - name: Resolve release target
+        id: release_target
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NEW_RELEASE_PUBLISHED: ${{ steps.semantic_release.outputs.new_release_published }}
+          NEW_RELEASE_TAG: ${{ steps.semantic_release.outputs.new_release_git_tag }}
+        run: |
+          set -euo pipefail
+          git fetch --force --tags origin
+
+          tag=""
+          if [[ "$NEW_RELEASE_PUBLISHED" == "true" ]]; then
+            tag="$NEW_RELEASE_TAG"
+          else
+            candidates=()
+            while IFS= read -r candidate; do
+              [[ -n "$candidate" ]] || continue
+              if ! release_json="$(gh release view "$candidate" --repo "$GITHUB_REPOSITORY" --json isDraft 2>/dev/null)"; then
+                candidates+=("$candidate")
+              elif [[ "$(jq -r '.isDraft' <<<"$release_json")" == "true" ]]; then
+                candidates+=("$candidate")
+              fi
+            done < <(git tag --points-at "$GITHUB_SHA" --list 'v*' --sort=-version:refname)
+
+            if (( ${#candidates[@]} > 1 )); then
+              printf 'Multiple unpublished release tags point at %s: %s\n' "$GITHUB_SHA" "${candidates[*]}" >&2
+              exit 1
+            fi
+            if (( ${#candidates[@]} == 1 )); then
+              tag="${candidates[0]}"
+            fi
+          fi
+
+          if [[ -z "$tag" ]]; then
+            echo 'No new or resumable release found.'
+            exit 0
+          fi
+          if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([+-][0-9A-Za-z.-]+)?$ ]]; then
+            printf 'Refusing invalid release tag: %s\n' "$tag" >&2
+            exit 1
+          fi
+          if [[ "$(git rev-list -n 1 "$tag")" != "$GITHUB_SHA" ]]; then
+            printf 'Release tag %s does not point at workflow commit %s\n' "$tag" "$GITHUB_SHA" >&2
+            exit 1
+          fi
+
+          echo "tag=$tag" >>"$GITHUB_OUTPUT"
+          echo "version=${tag#v}" >>"$GITHUB_OUTPUT"
 
       - name: Run GoReleaser
-        if: steps.semantic_release.outputs.new_release_published == 'true'
+        if: steps.release_target.outputs.tag != ''
         uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
         with:
           version: v2.14.3
@@ -87,18 +137,18 @@ jobs:
           TAP_GITHUB_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
 
       - name: Prepare npm packages
-        if: steps.semantic_release.outputs.new_release_published == 'true'
-        run: go run ./scripts/npm-package --version "${{ steps.semantic_release.outputs.new_release_version }}"
+        if: steps.release_target.outputs.tag != ''
+        run: go run ./scripts/npm-package --version "${{ steps.release_target.outputs.version }}"
 
       - name: Set up Node.js
-        if: steps.semantic_release.outputs.new_release_published == 'true'
+        if: steps.release_target.outputs.tag != ''
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
           package-manager-cache: false
 
       - name: Pack npm packages
-        if: steps.semantic_release.outputs.new_release_published == 'true'
+        if: steps.release_target.outputs.tag != ''
         run: |
           set -euo pipefail
           for package_dir in dist/npm/cli-* dist/npm/cli; do
@@ -106,7 +156,7 @@ jobs:
           done
 
       - name: Publish npm packages
-        if: steps.semantic_release.outputs.new_release_published == 'true'
+        if: steps.release_target.outputs.tag != ''
         run: |
           set -euo pipefail
 
@@ -147,9 +197,31 @@ jobs:
           publish_package dist/npm/cli
 
       - name: Attest release archives
-        if: steps.semantic_release.outputs.new_release_published == 'true'
+        if: steps.release_target.outputs.tag != ''
         uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
         with:
           subject-path: |
             dist/chilly_*.tar.gz
             dist/chilly_*.zip
+
+      - name: Verify draft assets
+        if: steps.release_target.outputs.tag != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ steps.release_target.outputs.tag }}
+        run: |
+          set -euo pipefail
+          test "$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json isDraft --jq '.isDraft')" = true
+          find dist -maxdepth 1 -type f \( -name 'chilly_*.tar.gz' -o -name 'chilly_*.zip' -o -name 'checksums.txt' \) -printf '%f\n' | sort >"$RUNNER_TEMP/expected-assets"
+          gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' | sort >"$RUNNER_TEMP/release-assets"
+          test "$(wc -l <"$RUNNER_TEMP/expected-assets" | tr -d ' ')" = 7
+          diff -u "$RUNNER_TEMP/expected-assets" "$RUNNER_TEMP/release-assets"
+
+      - name: Publish immutable release
+        if: steps.release_target.outputs.tag != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ steps.release_target.outputs.tag }}
+        run: |
+          gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --draft=false
+          gh release verify "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY"
