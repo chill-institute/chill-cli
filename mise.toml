@@ -1,5 +1,7 @@
 [tools]
+actionlint = "1.7.12"
 go = "1.26.6"
+zizmor = "1.29.0"
 
 [env]
 GOWORK = "off"
@@ -209,6 +211,15 @@ go tool cover -func=coverage.out | sort -k3,3n | sed -n '1,25p'
 description = "Run dependency vulnerability scan"
 run = "go tool govulncheck ./..."
 
+[tasks.actions]
+description = "Validate and audit GitHub Actions"
+shell = "bash -c"
+run = '''
+set -euo pipefail
+actionlint
+zizmor .github/workflows
+'''
+
 [tasks."contracts:check"]
 description = "Check local schema metadata against a sibling chill-contracts proto checkout"
 run = """
@@ -228,4 +239,4 @@ printf 'git hooks configured: %s/.githooks\n' "$repo_root"
 
 [tasks.verify]
 description = "Run formatting, lint, coverage, and security checks"
-depends = ["fmt:check", "mod:check", "lint", "coverage", "security"]
+depends = ["fmt:check", "mod:check", "lint", "coverage", "security", "actions"]
