@@ -48,8 +48,6 @@ jobs:
     timeout-minutes: 10
     permissions:
       contents: write
-      issues: write
-      pull-requests: write
     outputs:
       tag: ${{ steps.release_target.outputs.tag }}
       version: ${{ steps.release_target.outputs.version }}
