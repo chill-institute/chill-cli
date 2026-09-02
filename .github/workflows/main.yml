@@ -44,20 +44,15 @@ jobs:
   release:
     needs: [verify]
     if: ${{ needs.verify.result == 'success' }}
-    concurrency:
-      group: cli-release-main
-      cancel-in-progress: false
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-    environment:
-      name: release
-      deployment: false
+    timeout-minutes: 10
     permissions:
-      attestations: write
       contents: write
-      id-token: write
       issues: write
       pull-requests: write
+    outputs:
+      tag: ${{ steps.release_target.outputs.tag }}
+      version: ${{ steps.release_target.outputs.version }}
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -125,112 +120,15 @@ jobs:
           echo "tag=$tag" >>"$GITHUB_OUTPUT"
           echo "version=${tag#v}" >>"$GITHUB_OUTPUT"
 
-      - name: Run GoReleaser
-        if: steps.release_target.outputs.tag != ''
-        uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
-        with:
-          version: v2.14.3
-          args: release --clean
-          workdir: ${{ github.workspace }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAP_GITHUB_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
-
-      - name: Prepare npm packages
-        if: steps.release_target.outputs.tag != ''
-        run: go run ./scripts/npm-package --version "${{ steps.release_target.outputs.version }}"
-
-      - name: Set up Node.js
-        if: steps.release_target.outputs.tag != ''
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: 24
-          package-manager-cache: false
-
-      - name: Pack npm packages
-        if: steps.release_target.outputs.tag != ''
-        run: |
-          set -euo pipefail
-          for package_dir in dist/npm/cli-* dist/npm/cli; do
-            npm pack --dry-run "$package_dir" >/dev/null
-          done
-
-      - name: Publish npm packages
-        if: steps.release_target.outputs.tag != ''
-        run: |
-          set -euo pipefail
-
-          publish_package() {
-            local package_dir="$1"
-            local package_name
-            local package_version
-
-            package_name="$(node -p "require('./${package_dir}/package.json').name")"
-            package_version="$(node -p "require('./${package_dir}/package.json').version")"
-
-            if npm view "${package_name}@${package_version}" version >/dev/null 2>&1; then
-              printf '%s@%s is already published; skipping\n' "$package_name" "$package_version"
-              return 0
-            fi
-
-            for attempt in 1 2 3; do
-              if npm publish --provenance --access public "$package_dir"; then
-                return 0
-              fi
-
-              if npm view "${package_name}@${package_version}" version >/dev/null 2>&1; then
-                printf '%s@%s is visible after publish failure; continuing\n' "$package_name" "$package_version"
-                return 0
-              fi
-
-              if [ "$attempt" -eq 3 ]; then
-                return 1
-              fi
-
-              sleep "$((attempt * 10))"
-            done
-          }
-
-          for package_dir in dist/npm/cli-*; do
-            publish_package "$package_dir"
-          done
-          publish_package dist/npm/cli
-
-      - name: Attest release archives
-        if: steps.release_target.outputs.tag != ''
-        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
-        with:
-          subject-path: |
-            dist/chilly_*.tar.gz
-            dist/chilly_*.zip
-
-      - name: Verify draft assets
-        if: steps.release_target.outputs.tag != ''
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          RELEASE_TAG: ${{ steps.release_target.outputs.tag }}
-        run: |
-          set -euo pipefail
-          test "$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json isDraft --jq '.isDraft')" = true
-          find dist -maxdepth 1 -type f \( -name 'chilly_*.tar.gz' -o -name 'chilly_*.zip' -o -name 'checksums.txt' \) -printf '%f\n' | sort >"$RUNNER_TEMP/expected-assets"
-          gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' | sort >"$RUNNER_TEMP/release-assets"
-          test "$(wc -l <"$RUNNER_TEMP/expected-assets" | tr -d ' ')" = 7
-          diff -u "$RUNNER_TEMP/expected-assets" "$RUNNER_TEMP/release-assets"
-
-      - name: Publish immutable release
-        if: steps.release_target.outputs.tag != ''
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          RELEASE_TAG: ${{ steps.release_target.outputs.tag }}
-        run: |
-          gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --draft=false
-          for attempt in {1..12}; do
-            if gh release verify "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY"; then
-              exit 0
-            fi
-            if [[ "$attempt" == 12 ]]; then
-              exit 1
-            fi
-            echo "Release attestation is not available yet; retrying in 5 seconds."
-            sleep 5
-          done
+  publish:
+    needs: [release]
+    if: ${{ needs.release.outputs.tag != '' }}
+    concurrency:
+      group: cli-release-main
+      cancel-in-progress: false
+    uses: ./.github/workflows/_release.yml
+    with:
+      tag: ${{ needs.release.outputs.tag }}
+      ref: ${{ needs.release.outputs.tag }}
+    secrets:
+      TAP_GITHUB_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}

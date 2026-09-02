@@ -1,0 +1,163 @@
+name: Release (reusable)
+
+on:
+  workflow_call:
+    inputs:
+      tag:
+        description: Release tag to build and publish (vX.Y.Z)
+        required: true
+        type: string
+      ref:
+        description: Commit or tag to check out
+        required: true
+        type: string
+      verify:
+        description: Run mise run verify before releasing
+        required: false
+        type: boolean
+        default: false
+    secrets:
+      TAP_GITHUB_TOKEN:
+        required: true
+
+permissions: {}
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment:
+      name: release
+      deployment: false
+    permissions:
+      attestations: write
+      contents: write
+      id-token: write
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ inputs.ref }}
+
+      - name: Set up mise
+        uses: jdx/mise-action@7e36c90d9ab29c415a2384db3006f3ec8a8cc654 # v4.2.4
+        with:
+          cache: false
+
+      - name: Validate tag
+        id: tag
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([+-][0-9A-Za-z.-]+)?$ ]]
+          test "$(git describe --tags --exact-match HEAD)" = "$RELEASE_TAG"
+          echo "version=${RELEASE_TAG#v}" >>"$GITHUB_OUTPUT"
+
+      - name: Verify
+        if: ${{ inputs.verify }}
+        run: mise run verify
+
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
+        with:
+          version: v2.14.3
+          args: release --clean
+          workdir: ${{ github.workspace }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAP_GITHUB_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
+
+      - name: Prepare npm packages
+        run: go run ./scripts/npm-package --version "${{ steps.tag.outputs.version }}"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          package-manager-cache: false
+
+      - name: Pack npm packages
+        run: |
+          set -euo pipefail
+          for package_dir in dist/npm/cli-* dist/npm/cli; do
+            npm pack --dry-run "$package_dir" >/dev/null
+          done
+
+      - name: Publish npm packages
+        run: |
+          set -euo pipefail
+
+          publish_package() {
+            local package_dir="$1"
+            local package_name
+            local package_version
+
+            package_name="$(node -p "require('./${package_dir}/package.json').name")"
+            package_version="$(node -p "require('./${package_dir}/package.json').version")"
+
+            if npm view "${package_name}@${package_version}" version >/dev/null 2>&1; then
+              printf '%s@%s is already published; skipping\n' "$package_name" "$package_version"
+              return 0
+            fi
+
+            for attempt in 1 2 3; do
+              if npm publish --provenance --access public "$package_dir"; then
+                return 0
+              fi
+
+              if npm view "${package_name}@${package_version}" version >/dev/null 2>&1; then
+                printf '%s@%s is visible after publish failure; continuing\n' "$package_name" "$package_version"
+                return 0
+              fi
+
+              if [ "$attempt" -eq 3 ]; then
+                return 1
+              fi
+
+              sleep "$((attempt * 10))"
+            done
+          }
+
+          for package_dir in dist/npm/cli-*; do
+            publish_package "$package_dir"
+          done
+          publish_package dist/npm/cli
+
+      - name: Attest release archives
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: |
+            dist/chilly_*.tar.gz
+            dist/chilly_*.zip
+
+      - name: Verify draft assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          test "$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json isDraft --jq '.isDraft')" = true
+          find dist -maxdepth 1 -type f \( -name 'chilly_*.tar.gz' -o -name 'chilly_*.zip' -o -name 'checksums.txt' \) -printf '%f\n' | sort >"$RUNNER_TEMP/expected-assets"
+          gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' | sort >"$RUNNER_TEMP/release-assets"
+          test "$(wc -l <"$RUNNER_TEMP/expected-assets" | tr -d ' ')" = 7
+          diff -u "$RUNNER_TEMP/expected-assets" "$RUNNER_TEMP/release-assets"
+
+      - name: Publish immutable release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --draft=false
+          for attempt in {1..12}; do
+            if gh release verify "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY"; then
+              exit 0
+            fi
+            if [[ "$attempt" == 12 ]]; then
+              exit 1
+            fi
+            echo "Release attestation is not available yet; retrying in 5 seconds."
+            sleep 5
+          done
