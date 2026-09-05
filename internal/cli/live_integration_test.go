@@ -3,8 +3,6 @@
 package cli
 
 import (
-	"bytes"
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -20,7 +18,7 @@ func TestLiveAuthAndReadSurfaces(t *testing.T) {
 
 	configPath := filepath.Join(t.TempDir(), "config.json")
 
-	loginOutput := runLiveCommand(t, []string{
+	loginOutput := runLiveCommand(t, "auth login", []string{
 		"--config", configPath,
 		"--api-url", apiURL,
 		"auth", "login",
@@ -31,7 +29,7 @@ func TestLiveAuthAndReadSurfaces(t *testing.T) {
 		t.Fatalf("login output = %#v", loginOutput)
 	}
 
-	whoamiOutput := runLiveCommand(t, []string{
+	whoamiOutput := runLiveCommand(t, "whoami", []string{
 		"--config", configPath,
 		"whoami",
 		"--output", "json",
@@ -41,7 +39,7 @@ func TestLiveAuthAndReadSurfaces(t *testing.T) {
 		t.Fatalf("whoami output = %#v", whoamiOutput)
 	}
 
-	doctorOutput := runLiveCommand(t, []string{
+	doctorOutput := runLiveCommand(t, "doctor", []string{
 		"--config", configPath,
 		"doctor",
 		"--output", "json",
@@ -50,7 +48,7 @@ func TestLiveAuthAndReadSurfaces(t *testing.T) {
 		t.Fatalf("doctor output = %#v", doctorOutput)
 	}
 
-	searchOutput := runLiveCommand(t, []string{
+	searchOutput := runLiveCommand(t, "search", []string{
 		"--config", configPath,
 		"search",
 		"--query", "dune",
@@ -61,21 +59,4 @@ func TestLiveAuthAndReadSurfaces(t *testing.T) {
 	if !ok || len(results) == 0 {
 		t.Fatalf("search output = %#v", searchOutput)
 	}
-}
-
-func runLiveCommand(t *testing.T, args []string) map[string]any {
-	t.Helper()
-
-	stdout := &bytes.Buffer{}
-	stderr := &bytes.Buffer{}
-	exitCode := Run(args, strings.NewReader(""), stdout, stderr)
-	if exitCode != int(exitCodeSuccess) {
-		t.Fatalf("Run(%v) exitCode = %d, stderr = %q", args, exitCode, stderr.String())
-	}
-
-	var output map[string]any
-	if err := json.Unmarshal(stdout.Bytes(), &output); err != nil {
-		t.Fatalf("json.Unmarshal(stdout) error = %v; stdout=%q stderr=%q", err, stdout.String(), stderr.String())
-	}
-	return output
 }

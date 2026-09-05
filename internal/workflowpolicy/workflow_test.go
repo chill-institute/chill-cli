@@ -59,3 +59,27 @@ func TestOrgWorkflowInvariants(t *testing.T) {
 		})
 	}
 }
+
+func TestVerificationRequiresPinnedContracts(t *testing.T) {
+	all := workflows(t)
+	checkout := regexp.MustCompile(`(?m)          repository: chill-institute/chill-contracts\n          ref: ([0-9a-f]{40})(?: #[^\n]*)?\n          path: (\S+)\n          persist-credentials: false`)
+	var pin string
+	for _, name := range []string{"verify.yml", "main.yml"} {
+		verification, _, _ := strings.Cut(all[name], "\n  release:")
+		match := checkout.FindStringSubmatch(verification)
+		if match == nil {
+			t.Fatalf("%s verification needs an immutable contracts checkout", name)
+		}
+		if pin != "" && match[1] != pin {
+			t.Fatalf("%s contracts pin differs from pull-request verification", name)
+		}
+		pin = match[1]
+		parity := "CHILLY_CONTRACTS_PROTO: ${{ github.workspace }}/" + match[2] + "/proto/chill/v4/api.proto\n        run: mise run contracts:check"
+		if !strings.Contains(verification, parity) {
+			t.Fatalf("%s verification must require parity against its checked-out contracts", name)
+		}
+	}
+	if !strings.Contains(all["main.yml"], "needs: [verify]\n    if: ${{ needs.verify.result == 'success' }}") {
+		t.Fatal("release must require successful verification")
+	}
+}

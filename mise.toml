@@ -31,44 +31,27 @@ done
 
 [tasks."fmt:check"]
 description = "Check Go source formatting"
-run = """
-go_files="$(git ls-files '*.go')"
-if [ -z "$go_files" ]; then
+shell = "bash -c"
+run = '''
+set -euo pipefail
+tmpdir="$(mktemp -d "${TMPDIR:-/tmp}/chilly-fmt.XXXXXX")"
+trap 'rm -rf "$tmpdir"' EXIT
+git ls-files -z -- '*.go' > "$tmpdir/files"
+go_files=()
+while IFS= read -r -d '' file; do
+  [ -f "$file" ] || continue
+  go_files+=("./$file")
+done < "$tmpdir/files"
+if [ -z "${go_files[*]}" ]; then
   exit 0
 fi
 
-gofmt_files=''
-goimports_files=''
-gofmt_tmp=''
-goimports_tmp=''
-cleanup_fmt_check() {
-  rm -f "$gofmt_tmp" "$goimports_tmp"
-}
-trap cleanup_fmt_check EXIT
-gofmt_tmp="$(mktemp "${TMPDIR:-/tmp}/chilly-fmt-gofmt.XXXXXX")"
-goimports_tmp="$(mktemp "${TMPDIR:-/tmp}/chilly-fmt-goimports.XXXXXX")"
-
-printf '%s\n' "$go_files" | while IFS= read -r file; do
-  [ -n "$file" ] || continue
-  [ -f "$file" ] || continue
-  gofmt_output="$(gofmt -l "$file")"
-  if [ -n "$gofmt_output" ]; then
-    printf '%s\n' "$gofmt_output" >> "$gofmt_tmp"
-  fi
-  goimports_output="$(go tool goimports -l "$file")"
-  if [ -n "$goimports_output" ]; then
-    printf '%s\n' "$goimports_output" >> "$goimports_tmp"
-  fi
-done
-
-gofmt_files="$(cat "$gofmt_tmp")"
-goimports_files="$(cat "$goimports_tmp")"
-
+gofmt_files="$(gofmt -l "${go_files[@]}")"
+goimports_files="$(go tool goimports -l "${go_files[@]}")"
 if [ -z "$gofmt_files" ] && [ -z "$goimports_files" ]; then
   printf '==> Go formatting is clean\n'
   exit 0
 fi
-
 if [ -n "$gofmt_files" ]; then
   printf 'gofmt needs to be run on:\n%s\n' "$gofmt_files" >&2
 fi
@@ -76,7 +59,7 @@ if [ -n "$goimports_files" ]; then
   printf 'goimports needs to be run on:\n%s\n' "$goimports_files" >&2
 fi
 exit 1
-"""
+'''
 
 [tasks."fmt:staged"]
 description = "Format staged Go files and restage them"
@@ -194,18 +177,21 @@ awk -v total="$total_coverage" -v threshold="$threshold" '
 
 [tasks."coverage:report"]
 description = "Show package coverage and the lowest-covered functions"
-run = """
-if [ ! -f coverage.out ]; then
-  go test ./... -covermode=atomic -coverprofile=coverage.out
+shell = "bash -c"
+run = '''
+set -euo pipefail
+tmpdir="$(mktemp -d "${TMPDIR:-/tmp}/chilly-cover-report.XXXXXX")"
+trap 'rm -rf "$tmpdir"' EXIT
+if ! go test -count=1 ./... -covermode=atomic -coverprofile="$tmpdir/coverage.out" >"$tmpdir/test.log" 2>&1; then
+  cat "$tmpdir/test.log" >&2
+  exit 1
 fi
 
 printf '==> package coverage\n'
-go test ./... -covermode=atomic -coverprofile=/tmp/chilly-cover-report.out >/tmp/chilly-cover-report.log
-tail -n 20 /tmp/chilly-cover-report.log
-
+tail -n 20 "$tmpdir/test.log"
 printf '\n==> lowest-covered functions\n'
-go tool cover -func=coverage.out | sort -k3,3n | sed -n '1,25p'
-"""
+go tool cover -func="$tmpdir/coverage.out" | sort -k3,3n | sed -n '1,25p'
+'''
 
 [tasks.security]
 description = "Run dependency vulnerability scan"
@@ -225,7 +211,7 @@ description = "Check local schema metadata against a sibling chill-contracts pro
 run = """
 repo_root="$(git rev-parse --show-toplevel)"
 proto_path="${CHILLY_CONTRACTS_PROTO:-$repo_root/../chill-contracts/proto/chill/v4/api.proto}"
-CHILLY_CONTRACTS_PROTO="$proto_path" CHILLY_REQUIRE_CONTRACTS=1 go test ./internal/cli -run '^TestLocalSchemaMatchesContractsProto$'
+CHILLY_CONTRACTS_PROTO="$proto_path" CHILLY_REQUIRE_CONTRACTS=1 go test -count=1 ./internal/cli -run '^TestLocalSchemaMatchesContractsProto$'
 """
 
 [tasks.hooks]
