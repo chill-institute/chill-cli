@@ -1,7 +1,7 @@
 [tools]
 actionlint = "1.7.12"
 go = "1.27.1"
-zizmor = "1.29.0"
+zizmor = "1.30.0"
 
 [env]
 GOWORK = "off"
