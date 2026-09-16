@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/chill-institute/chill-cli/internal/update"
-	"github.com/chill-institute/chill-cli/pkg/config"
+	"github.com/chill-institute/chill-cli/v2/internal/update"
+	"github.com/chill-institute/chill-cli/v2/pkg/config"
 )
 
 func TestResolveSettingsSetInput(t *testing.T) {

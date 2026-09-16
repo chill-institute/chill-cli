@@ -14,9 +14,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/chill-institute/chill-cli/internal/buildinfo"
-	"github.com/chill-institute/chill-cli/pkg/config"
-	"github.com/chill-institute/chill-cli/pkg/rpc"
+	"github.com/chill-institute/chill-cli/v2/internal/buildinfo"
+	"github.com/chill-institute/chill-cli/v2/pkg/config"
+	"github.com/chill-institute/chill-cli/v2/pkg/rpc"
 	"golang.org/x/term"
 )
 

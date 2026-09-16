@@ -7,8 +7,8 @@ import (
 	"io"
 	"strings"
 
-	"github.com/chill-institute/chill-cli/pkg/chill"
-	"github.com/chill-institute/chill-cli/pkg/rpc"
+	"github.com/chill-institute/chill-cli/v2/pkg/chill"
+	"github.com/chill-institute/chill-cli/v2/pkg/rpc"
 )
 
 type exitCode int

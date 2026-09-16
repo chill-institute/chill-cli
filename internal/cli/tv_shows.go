@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/chill-institute/chill-cli/pkg/chill"
-	"github.com/chill-institute/chill-cli/pkg/rpc"
+	"github.com/chill-institute/chill-cli/v2/pkg/chill"
+	"github.com/chill-institute/chill-cli/v2/pkg/rpc"
 	"github.com/spf13/cobra"
 )
 

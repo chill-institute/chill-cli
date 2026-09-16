@@ -7,8 +7,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/chill-institute/chill-cli/pkg/config"
-	"github.com/chill-institute/chill-cli/pkg/rpc"
+	"github.com/chill-institute/chill-cli/v2/pkg/config"
+	"github.com/chill-institute/chill-cli/v2/pkg/rpc"
 	"github.com/spf13/cobra"
 )
 

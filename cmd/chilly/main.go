@@ -4,7 +4,7 @@ import (
 	"io"
 	"os"
 
-	"github.com/chill-institute/chill-cli/internal/cli"
+	"github.com/chill-institute/chill-cli/v2/internal/cli"
 )
 
 var exit = os.Exit

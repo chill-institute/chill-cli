@@ -15,7 +15,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chill-institute/chill-cli/pkg/config"
+	"github.com/chill-institute/chill-cli/v2/pkg/config"
 )
 
 func TestAuthLoginWebTokenFlowPromptsForTokenAndVerifies(t *testing.T) {

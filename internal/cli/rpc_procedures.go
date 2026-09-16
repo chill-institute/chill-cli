@@ -1,6 +1,6 @@
 package cli
 
-import "github.com/chill-institute/chill-cli/pkg/chill"
+import "github.com/chill-institute/chill-cli/v2/pkg/chill"
 
 const (
 	procedureUserSearch                   = chill.ProcedureUserSearch

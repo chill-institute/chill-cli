@@ -26,7 +26,8 @@ graph LR
 
 The command package stays flat so public surfaces and their shared helpers are
 easy to scan. Product behavior remains in the hosted API. `pkg/` is the
-importable Go surface for sibling clients such as `chill-mcp`; it must not
+importable Go surface for sibling clients such as `chill-mcp`, imported as
+`github.com/chill-institute/chill-cli/v2/pkg/...`; it must not
 depend on `internal/`, and changes to it follow semantic versioning through the
 normal release flow.
 

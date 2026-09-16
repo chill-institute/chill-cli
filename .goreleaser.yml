@@ -17,9 +17,9 @@ builds:
       - arm64
     ldflags:
       - -s -w
-      - -X github.com/chill-institute/chill-cli/internal/buildinfo.version={{ .Version }}
-      - -X github.com/chill-institute/chill-cli/internal/buildinfo.commit={{ .Commit }}
-      - -X github.com/chill-institute/chill-cli/internal/buildinfo.date={{ .Date }}
+      - -X github.com/chill-institute/chill-cli/v2/internal/buildinfo.version={{ .Version }}
+      - -X github.com/chill-institute/chill-cli/v2/internal/buildinfo.commit={{ .Commit }}
+      - -X github.com/chill-institute/chill-cli/v2/internal/buildinfo.date={{ .Date }}
 
 archives:
   - id: chilly

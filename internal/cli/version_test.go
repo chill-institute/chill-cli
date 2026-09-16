@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/chill-institute/chill-cli/internal/buildinfo"
+	"github.com/chill-institute/chill-cli/v2/internal/buildinfo"
 )
 
 func TestVersionCommandOutputsBuildInfo(t *testing.T) {
