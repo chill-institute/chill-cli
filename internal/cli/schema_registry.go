@@ -879,10 +879,13 @@ var typeSchemaRegistry = map[string]schemaType{
 	"chill.v4.CatalogSettings": {
 		ID:      "chill.v4.CatalogSettings",
 		Kind:    "type",
-		Summary: "User catalog source preferences",
+		Summary: "User catalog source and sort preferences",
 		Fields: []schemaField{
 			schemaFieldFor("movies_source", "string"),
 			schemaFieldFor("tv_shows_source", "string"),
+			optionalSchemaField("movies_sort", "string"),
+			optionalSchemaField("tv_shows_sort", "string"),
+			optionalSchemaField("sort", "string"),
 		},
 	},
 	"chill.v4.DownloadSettings": {
@@ -997,6 +1000,7 @@ var typeSchemaRegistry = map[string]schemaType{
 			schemaFieldFor("backdrop_url", "string"),
 			schemaFieldFor("overview", "string"),
 			repeatedSchemaField("genres", "string"),
+			schemaFieldFor("release_date", "string"),
 		},
 	},
 	"chill.v4.SearchSettings": {
@@ -1033,6 +1037,7 @@ var typeSchemaRegistry = map[string]schemaType{
 			schemaFieldFor("season_count", "integer"),
 			schemaFieldFor("status", "string"),
 			repeatedSchemaField("networks", "string"),
+			schemaFieldFor("first_air_date", "string"),
 		},
 	},
 	"chill.v4.TVShowDetail": {
@@ -1052,6 +1057,7 @@ var typeSchemaRegistry = map[string]schemaType{
 			schemaFieldFor("status", "string"),
 			repeatedSchemaField("networks", "string"),
 			repeatedSchemaField("genres", "string"),
+			schemaFieldFor("first_air_date", "string"),
 		},
 	},
 	"chill.v4.TVShowDownload": {

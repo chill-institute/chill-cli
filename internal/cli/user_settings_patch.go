@@ -116,6 +116,23 @@ var userSettingsPatchSpecs = []userSettingsPatchSpec{
 		description: "one of: all-providers, netflix, hbo-max, apple-tv-plus, prime-video, disney-plus, hulu, paramount-plus, amc-plus, peacock",
 		normalize:   normalizeTVShowsSourcePatchValue,
 	},
+	{
+		aliases:     []string{"catalog-sort", "catalog.sort"},
+		path:        []string{"catalog", "sort"},
+		valueType:   "enum",
+		description: "shared movies, TV shows, and providers ordering; one of: popularity, rating-desc, rating-asc, release-date-desc, release-date-asc",
+		normalize: normalizeEnumValue(map[string]string{
+			"popularity":        "CATALOG_SORT_POPULARITY",
+			"rating-desc":       "CATALOG_SORT_RATING_DESC",
+			"rating_desc":       "CATALOG_SORT_RATING_DESC",
+			"rating-asc":        "CATALOG_SORT_RATING_ASC",
+			"rating_asc":        "CATALOG_SORT_RATING_ASC",
+			"release-date-desc": "CATALOG_SORT_RELEASE_DATE_DESC",
+			"release_date_desc": "CATALOG_SORT_RELEASE_DATE_DESC",
+			"release-date-asc":  "CATALOG_SORT_RELEASE_DATE_ASC",
+			"release_date_asc":  "CATALOG_SORT_RELEASE_DATE_ASC",
+		}),
+	},
 }
 
 func normalizeUserSettingsPatch(field string, value string) (userSettingsPatch, error) {

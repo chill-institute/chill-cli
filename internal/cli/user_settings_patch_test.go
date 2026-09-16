@@ -32,6 +32,17 @@ func TestNormalizeUserSettingsPatch(t *testing.T) {
 		t.Fatalf("tvSourcePatch = %#v", tvSourcePatch)
 	}
 
+	catalogSortPatch, err := normalizeUserSettingsPatch("catalog-sort", "Release-Date-Desc")
+	if err != nil {
+		t.Fatalf("normalizeUserSettingsPatch(catalog sort) error = %v", err)
+	}
+	if catalogSortPatch.Field != "catalog.sort" || catalogSortPatch.Value != "CATALOG_SORT_RELEASE_DATE_DESC" {
+		t.Fatalf("catalogSortPatch = %#v", catalogSortPatch)
+	}
+	if _, err := normalizeUserSettingsPatch("catalog.sort", "unspecified"); err == nil {
+		t.Fatal("normalizeUserSettingsPatch(catalog sort) accepted unspecified")
+	}
+
 	downloadPatch, err := normalizeUserSettingsPatch("download.folderId", "42")
 	if err != nil {
 		t.Fatalf("normalizeUserSettingsPatch(download) error = %v", err)
