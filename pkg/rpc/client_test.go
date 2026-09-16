@@ -478,3 +478,30 @@ func TestCallClosesOversizedResponseBody(t *testing.T) {
 		t.Fatal("response body was not closed")
 	}
 }
+
+func TestNewClientOptionsSetIdentityHeaders(t *testing.T) {
+	t.Parallel()
+	var name, version, requestID string
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		name = request.Header.Get("X-Chill-Client")
+		version = request.Header.Get("X-Chill-Client-Version")
+		requestID = request.Header.Get("X-Request-Id")
+		writer.Header().Set("Content-Type", "application/json")
+		_, _ = writer.Write([]byte(`{}`))
+	}))
+	defer server.Close()
+
+	client := NewClient(server.URL, server.Client(), WithClientName("mcp"), WithClientVersion("1.2.3"), WithClientName(" bad name "), nil)
+	if _, err := client.Call(context.Background(), CallRequest{Procedure: "chill.v4.UserService/GetMovies", AuthMode: AuthNone}); err != nil {
+		t.Fatalf("Call() error = %v", err)
+	}
+	if name != "mcp" {
+		t.Fatalf("X-Chill-Client = %q, want mcp", name)
+	}
+	if version != "1.2.3" {
+		t.Fatalf("X-Chill-Client-Version = %q, want 1.2.3", version)
+	}
+	if !strings.HasPrefix(requestID, "mcp-") {
+		t.Fatalf("X-Request-Id = %q, want mcp- prefix", requestID)
+	}
+}

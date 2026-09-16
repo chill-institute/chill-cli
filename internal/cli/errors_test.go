@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/chill-institute/chill-cli/internal/rpc"
+	"github.com/chill-institute/chill-cli/pkg/rpc"
 )
 
 func TestCLIErrorErrorUsesMessage(t *testing.T) {

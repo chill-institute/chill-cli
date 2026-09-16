@@ -14,8 +14,8 @@ import (
 	"time"
 
 	"github.com/chill-institute/chill-cli/internal/buildinfo"
-	"github.com/chill-institute/chill-cli/internal/config"
-	"github.com/chill-institute/chill-cli/internal/rpc"
+	"github.com/chill-institute/chill-cli/pkg/config"
+	"github.com/chill-institute/chill-cli/pkg/rpc"
 )
 
 type roundTripFunc func(*http.Request) (*http.Response, error)

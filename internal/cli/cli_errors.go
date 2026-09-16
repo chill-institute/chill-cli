@@ -7,7 +7,8 @@ import (
 	"io"
 	"strings"
 
-	"github.com/chill-institute/chill-cli/internal/rpc"
+	"github.com/chill-institute/chill-cli/pkg/chill"
+	"github.com/chill-institute/chill-cli/pkg/rpc"
 )
 
 type exitCode int
@@ -65,6 +66,17 @@ func wrapInternalError(code, message string, err error) error {
 		return nil
 	}
 	return &cliError{Kind: errorKindInternal, Code: code, Message: message, Err: err}
+}
+
+func wrapValidationError(err error) error {
+	if err == nil {
+		return nil
+	}
+	var validation *chill.ValidationError
+	if errors.As(err, &validation) {
+		return &cliError{Kind: errorKindUsage, Code: validation.Code, Message: validation.Message, Err: err}
+	}
+	return err
 }
 
 func wrapUsageError(code string, err error) error {

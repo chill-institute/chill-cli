@@ -14,8 +14,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/chill-institute/chill-cli/internal/config"
-	"github.com/chill-institute/chill-cli/internal/rpc"
+	"github.com/chill-institute/chill-cli/internal/buildinfo"
+	"github.com/chill-institute/chill-cli/pkg/config"
+	"github.com/chill-institute/chill-cli/pkg/rpc"
 	"golang.org/x/term"
 )
 
@@ -156,7 +157,7 @@ func (app *appContext) saveConfig(cfg config.Config) error {
 }
 
 func (app *appContext) rpcClient(cfg config.Config) *rpc.Client {
-	return rpc.NewClient(cfg.APIBaseURL, nil)
+	return rpc.NewClient(cfg.APIBaseURL, nil, rpc.WithClientVersion(buildinfo.Current().Version))
 }
 
 func (app *appContext) userToken(cfg config.Config) (string, error) {

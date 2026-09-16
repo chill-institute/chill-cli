@@ -28,8 +28,9 @@ Hosted integration tests are opt-in through `mise run test:integration`.
 ## Ownership
 
 - Cobra commands and orchestration: `internal/cli/`
-- Local profiles and credentials: `internal/config/`
-- API transport and error mapping: `internal/rpc/`
+- Public procedure names and input validation: `pkg/chill/`
+- Local profiles and credentials: `pkg/config/`
+- API transport and error mapping: `pkg/rpc/`
 - Release lookup and binary replacement: `internal/update/`
 - Shared tasks and hook behavior: `mise.toml`
 

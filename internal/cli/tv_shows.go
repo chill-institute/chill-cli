@@ -3,11 +3,10 @@ package cli
 import (
 	"context"
 	"fmt"
-	"strconv"
 	"strings"
-	"unicode"
 
-	"github.com/chill-institute/chill-cli/internal/rpc"
+	"github.com/chill-institute/chill-cli/pkg/chill"
+	"github.com/chill-institute/chill-cli/pkg/rpc"
 	"github.com/spf13/cobra"
 )
 
@@ -285,107 +284,16 @@ func normalizeTVShowsSourcePatchValue(raw string) (any, error) {
 }
 
 func normalizeTVShowsSourceValue(raw string, allowEmpty bool) (string, error) {
-	trimmed := strings.TrimSpace(raw)
-	if trimmed == "" {
-		if allowEmpty {
-			return "", nil
-		}
-		return "", usageError("invalid_tv_shows_source", "TV shows source is required")
-	}
-	if strings.IndexFunc(trimmed, unicode.IsControl) >= 0 {
-		return "", usageError("invalid_tv_shows_source", "TV shows source must not contain control characters")
-	}
-	if strings.Contains(trimmed, "..") || strings.Contains(trimmed, "%") || strings.ContainsAny(trimmed, "/?#") {
-		return "", usageError("invalid_tv_shows_source", "TV shows source must be one of the documented source names")
-	}
-
-	switch strings.ToUpper(trimmed) {
-	case "TV_SHOWS_SOURCE_ALL_PROVIDERS",
-		"TV_SHOWS_SOURCE_NETFLIX",
-		"TV_SHOWS_SOURCE_HBO_MAX",
-		"TV_SHOWS_SOURCE_APPLE_TV_PLUS",
-		"TV_SHOWS_SOURCE_PRIME_VIDEO",
-		"TV_SHOWS_SOURCE_DISNEY_PLUS",
-		"TV_SHOWS_SOURCE_HULU",
-		"TV_SHOWS_SOURCE_PARAMOUNT_PLUS",
-		"TV_SHOWS_SOURCE_AMC_PLUS",
-		"TV_SHOWS_SOURCE_PEACOCK":
-		return strings.ToUpper(trimmed), nil
-	}
-
-	normalized := strings.ToLower(trimmed)
-	normalized = strings.ReplaceAll(normalized, "_", "-")
-	normalized = strings.ReplaceAll(normalized, " ", "-")
-	switch normalized {
-	case "all", "all-providers", "all-provider", "providers":
-		return "TV_SHOWS_SOURCE_ALL_PROVIDERS", nil
-	case "netflix":
-		return "TV_SHOWS_SOURCE_NETFLIX", nil
-	case "hbo-max", "hbomax":
-		return "TV_SHOWS_SOURCE_HBO_MAX", nil
-	case "apple-tv-plus", "apple-tv", "appletv-plus", "appletv":
-		return "TV_SHOWS_SOURCE_APPLE_TV_PLUS", nil
-	case "prime-video", "prime", "amazon-prime", "amazon-prime-video":
-		return "TV_SHOWS_SOURCE_PRIME_VIDEO", nil
-	case "disney-plus", "disney":
-		return "TV_SHOWS_SOURCE_DISNEY_PLUS", nil
-	case "hulu":
-		return "TV_SHOWS_SOURCE_HULU", nil
-	case "paramount-plus", "paramount":
-		return "TV_SHOWS_SOURCE_PARAMOUNT_PLUS", nil
-	case "amc-plus", "amc":
-		return "TV_SHOWS_SOURCE_AMC_PLUS", nil
-	case "peacock":
-		return "TV_SHOWS_SOURCE_PEACOCK", nil
-	default:
-		return "", usageError("invalid_tv_shows_source", "unknown TV shows source %q", raw)
-	}
+	value, err := chill.NormalizeTVShowsSource(raw, allowEmpty)
+	return value, wrapValidationError(err)
 }
 
 func normalizeIMDbID(raw string) (string, error) {
-	trimmed := strings.ToLower(strings.TrimSpace(raw))
-	if trimmed == "" {
-		return "", usageError("missing_imdb_id", "IMDb id is required")
-	}
-	if strings.IndexFunc(trimmed, unicode.IsControl) >= 0 {
-		return "", usageError("invalid_imdb_id", "IMDb id must not contain control characters")
-	}
-	if strings.Contains(trimmed, "..") {
-		return "", usageError("invalid_imdb_id", "IMDb id must not contain traversal segments")
-	}
-	if strings.ContainsAny(trimmed, "/?#") {
-		return "", usageError("invalid_imdb_id", "IMDb id must not contain path, query, or fragment characters")
-	}
-	if strings.Contains(trimmed, "%") {
-		return "", usageError("invalid_imdb_id", "IMDb id must not contain percent-encoded characters")
-	}
-	if !strings.HasPrefix(trimmed, "tt") {
-		return "", usageError("invalid_imdb_id", "IMDb id must start with tt")
-	}
-	digits := strings.TrimPrefix(trimmed, "tt")
-	if len(digits) < 7 || len(digits) > 12 {
-		return "", usageError("invalid_imdb_id", "IMDb id must include 7 to 12 digits")
-	}
-	for _, r := range digits {
-		if r < '0' || r > '9' {
-			return "", usageError("invalid_imdb_id", "IMDb id must contain only digits after tt")
-		}
-	}
-	return trimmed, nil
+	value, err := chill.NormalizeIMDbID(raw)
+	return value, wrapValidationError(err)
 }
 
 func normalizeEpisodeOrdinal(raw string, kind string) (int32, error) {
-	trimmed := strings.TrimSpace(raw)
-	if trimmed == "" {
-		return 0, usageError("missing_"+kind+"_number", "%s number is required", kind)
-	}
-
-	value, err := strconv.ParseInt(trimmed, 10, 32)
-	if err != nil {
-		return 0, usageError("invalid_"+kind+"_number", "%s number must be an integer", kind)
-	}
-	if value <= 0 {
-		return 0, usageError("invalid_"+kind+"_number", "%s number must be positive", kind)
-	}
-	return int32(value), nil
+	value, err := chill.NormalizeEpisodeOrdinal(raw, kind)
+	return value, wrapValidationError(err)
 }

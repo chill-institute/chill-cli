@@ -3,11 +3,10 @@ package cli
 import (
 	"context"
 	"fmt"
-	"net/url"
 	"strings"
-	"unicode"
 
-	"github.com/chill-institute/chill-cli/internal/rpc"
+	"github.com/chill-institute/chill-cli/pkg/chill"
+	"github.com/chill-institute/chill-cli/pkg/rpc"
 	"github.com/spf13/cobra"
 )
 
@@ -135,48 +134,11 @@ func buildAddTransferRequest(app *appContext, transferURL string, rawRequest str
 }
 
 func normalizeAddTransferMovieSource(raw string) (string, error) {
-	normalized := strings.ToLower(strings.TrimSpace(raw))
-	normalized = strings.ReplaceAll(normalized, "_", "-")
-	normalized = strings.ReplaceAll(normalized, " ", "-")
-	values := map[string]string{
-		"imdb-moviemeter": "MOVIES_SOURCE_IMDB_MOVIEMETER",
-		"imdb/moviemeter": "MOVIES_SOURCE_IMDB_MOVIEMETER",
-		"imdb-top-250":    "MOVIES_SOURCE_IMDB_TOP_250",
-		"imdb/top-250":    "MOVIES_SOURCE_IMDB_TOP_250",
-		"yts":             "MOVIES_SOURCE_YTS",
-		"rotten-tomatoes": "MOVIES_SOURCE_ROTTEN_TOMATOES",
-		"rottentomatoes":  "MOVIES_SOURCE_ROTTEN_TOMATOES",
-		"trakt":           "MOVIES_SOURCE_TRAKT",
-	}
-	if source, ok := values[normalized]; ok {
-		return source, nil
-	}
-	return "", usageError("invalid_movies_source", "movie source must be one of the documented source names")
+	value, err := chill.NormalizeMovieSource(raw)
+	return value, wrapValidationError(err)
 }
 
 func normalizeTransferURL(raw string) (string, error) {
-	trimmed := strings.TrimSpace(raw)
-	if trimmed == "" {
-		return "", usageError("missing_url", "--url is required")
-	}
-	if strings.IndexFunc(trimmed, unicode.IsControl) >= 0 {
-		return "", usageError("invalid_url", "--url must not contain control characters")
-	}
-	if strings.IndexFunc(trimmed, unicode.IsSpace) >= 0 {
-		return "", usageError("invalid_url", "--url must not contain unescaped whitespace")
-	}
-	if strings.HasPrefix(strings.ToLower(trimmed), "magnet:?") {
-		return trimmed, nil
-	}
-	parsed, err := url.Parse(trimmed)
-	if err != nil {
-		return "", usageError("invalid_url", "parse --url: %v", err)
-	}
-	if parsed.Scheme != "http" && parsed.Scheme != "https" {
-		return "", usageError("invalid_url", "--url must be a magnet link or start with http:// or https://")
-	}
-	if parsed.Hostname() == "" {
-		return "", usageError("invalid_url", "--url must include a host")
-	}
-	return trimmed, nil
+	value, err := chill.NormalizeTransferURL(raw)
+	return value, wrapValidationError(err)
 }

@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"unicode"
 
-	"github.com/chill-institute/chill-cli/internal/rpc"
+	"github.com/chill-institute/chill-cli/pkg/chill"
+	"github.com/chill-institute/chill-cli/pkg/rpc"
 	"github.com/spf13/cobra"
 )
 
@@ -80,21 +80,6 @@ func runSearch(app *appContext, query string, indexerID string, fields string) e
 }
 
 func normalizeIndexerID(raw string) (string, error) {
-	trimmed := strings.TrimSpace(raw)
-	if trimmed == "" {
-		return "", usageError("missing_indexer_id", "indexer id cannot be empty")
-	}
-	if strings.IndexFunc(trimmed, unicode.IsControl) >= 0 {
-		return "", usageError("invalid_indexer_id", "indexer id must not contain control characters")
-	}
-	if strings.Contains(trimmed, "..") {
-		return "", usageError("invalid_indexer_id", "indexer id must not contain traversal segments")
-	}
-	if strings.ContainsAny(trimmed, `/\?#`) {
-		return "", usageError("invalid_indexer_id", "indexer id must not contain path, query, or fragment characters")
-	}
-	if strings.Contains(trimmed, "%") {
-		return "", usageError("invalid_indexer_id", "indexer id must not contain percent-encoded characters")
-	}
-	return trimmed, nil
+	value, err := chill.NormalizeIndexerID(raw)
+	return value, wrapValidationError(err)
 }

@@ -17,14 +17,18 @@ graph LR
 | --- | --- |
 | `cmd/chilly/` | Process entrypoint |
 | `internal/cli/` | Commands, metadata, rendering, and orchestration |
-| `internal/config/` | Profiles, API URL, and auth-token persistence |
-| `internal/rpc/` | Procedure transport, headers, and API errors |
+| `pkg/chill/` | Public procedure names and local input validation shared with other Go clients |
+| `pkg/config/` | Public profiles, API URL, and auth-token persistence |
+| `pkg/rpc/` | Public procedure transport, client identity headers, and API errors |
 | `internal/buildinfo/` | Version, commit, and build date |
 | `internal/update/` | Release lookup and executable replacement |
 | `skills/chilly-cli/` | Agent-facing operating guidance |
 
 The command package stays flat so public surfaces and their shared helpers are
-easy to scan. Product behavior remains in the hosted API.
+easy to scan. Product behavior remains in the hosted API. `pkg/` is the
+importable Go surface for sibling clients such as `chill-mcp`; it must not
+depend on `internal/`, and changes to it follow semantic versioning through the
+normal release flow.
 
 ## Local State
 

@@ -4,7 +4,7 @@ import (
 	"io"
 	"strings"
 
-	"github.com/chill-institute/chill-cli/internal/config"
+	"github.com/chill-institute/chill-cli/pkg/config"
 	"github.com/spf13/cobra"
 )
 

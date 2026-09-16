@@ -13,8 +13,6 @@ import (
 	"strings"
 	"time"
 	"unicode"
-
-	"github.com/chill-institute/chill-cli/internal/buildinfo"
 )
 
 const (
@@ -25,6 +23,8 @@ const (
 	maxErrorBodyBytes             = 64 << 10
 	clientNameHeader              = "X-Chill-Client"
 	clientVersionHeader           = "X-Chill-Client-Version"
+	defaultClientName             = "cli"
+	defaultClientVersion          = "dev"
 )
 
 var errResponseBodyTooLarge = errors.New("rpc response body exceeds limit")
@@ -36,7 +36,34 @@ type Client struct {
 	httpClient        *http.Client
 	responseBodyLimit int64
 	errorBodyLimit    int64
+	clientName        string
 	clientVersion     string
+}
+
+// Option customizes a Client. Options apply in order.
+type Option func(*Client)
+
+// WithClientName sets the X-Chill-Client header and request ID prefix.
+// Empty or non-token values are ignored.
+func WithClientName(name string) Option {
+	return func(client *Client) {
+		trimmed := strings.TrimSpace(name)
+		if trimmed == "" || strings.IndexFunc(trimmed, func(r rune) bool { return r > unicode.MaxASCII || unicode.IsSpace(r) || unicode.IsControl(r) }) >= 0 {
+			return
+		}
+		client.clientName = trimmed
+	}
+}
+
+// WithClientVersion sets the X-Chill-Client-Version header. Empty values are ignored.
+func WithClientVersion(version string) Option {
+	return func(client *Client) {
+		trimmed := strings.TrimSpace(version)
+		if trimmed == "" || strings.IndexFunc(trimmed, func(r rune) bool { return r > unicode.MaxASCII || unicode.IsSpace(r) || unicode.IsControl(r) }) >= 0 {
+			return
+		}
+		client.clientVersion = trimmed
+	}
 }
 
 type CallRequest struct {
@@ -81,19 +108,28 @@ func (err APIError) Unwrap() error {
 	return err.Err
 }
 
-func NewClient(baseURL string, httpClient *http.Client) *Client {
+// NewClient returns a client for the hosted v4 API. An empty baseURL selects
+// production. Without options the client identifies as "cli" version "dev".
+func NewClient(baseURL string, httpClient *http.Client, opts ...Option) *Client {
 	trimmedBaseURL := strings.TrimRight(strings.TrimSpace(baseURL), "/")
 	if trimmedBaseURL == "" {
 		trimmedBaseURL = "https://api.chill.institute"
 	}
 
-	return &Client{
+	client := &Client{
 		baseURL:           trimmedBaseURL,
 		httpClient:        prepareHTTPClient(httpClient),
 		responseBodyLimit: maxResponseBodyBytes,
 		errorBodyLimit:    maxErrorBodyBytes,
-		clientVersion:     buildinfo.Current().Version,
+		clientName:        defaultClientName,
+		clientVersion:     defaultClientVersion,
 	}
+	for _, opt := range opts {
+		if opt != nil {
+			opt(client)
+		}
+	}
+	return client
 }
 
 func prepareHTTPClient(source *http.Client) *http.Client {
@@ -162,8 +198,8 @@ func (client Client) Call(ctx context.Context, req CallRequest) (CallResponse, e
 	}
 	httpRequest.Header.Set("Content-Type", "application/json")
 	httpRequest.Header.Set("Accept", "application/json")
-	httpRequest.Header.Set("X-Request-Id", newRequestID())
-	httpRequest.Header.Set(clientNameHeader, "cli")
+	httpRequest.Header.Set("X-Request-Id", newRequestID(client.clientName))
+	httpRequest.Header.Set(clientNameHeader, client.clientName)
 	httpRequest.Header.Set(clientVersionHeader, client.clientVersion)
 
 	if err := applyAuth(httpRequest, req.AuthMode, req.AuthToken); err != nil {
@@ -286,10 +322,10 @@ func parseAPIError(response CallResponse) error {
 	return apiErr
 }
 
-func newRequestID() string {
+func newRequestID(prefix string) string {
 	bytes := make([]byte, 8)
 	if _, err := rand.Read(bytes); err != nil {
-		return fmt.Sprintf("cli-%d", time.Now().UnixNano())
+		return fmt.Sprintf("%s-%d", prefix, time.Now().UnixNano())
 	}
-	return "cli-" + hex.EncodeToString(bytes)
+	return prefix + "-" + hex.EncodeToString(bytes)
 }
