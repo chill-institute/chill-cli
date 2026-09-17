@@ -33,6 +33,6 @@ Use this reference when the task is about authentication, profile selection, or 
 
 ## Browser Token Flow
 
-`chilly auth login` defaults to the hosted web token flow: it prints the `/auth/cli-token` page for the configured web app host, tells the user to copy the setup token, then waits at a hidden terminal prompt. Use `chilly auth login --dry-run --output json` to preview the exact `login_url` without saving credentials.
+`chilly auth login` defaults to the hosted web token flow: it prints the `/auth/setup-token` page for the configured web app host, tells the user to copy the setup token, then waits at a hidden terminal prompt. Use `chilly auth login --dry-run --output json` to preview the exact `login_url` without saving credentials.
 
 If the browser is on another machine, open the same page in a signed-in browser and paste the token into the hidden prompt. Keep `--token` for compatibility when automation cannot provide controlled stdin.
