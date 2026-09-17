@@ -114,6 +114,7 @@ Save user settings in one of two modes:
 		Example: strings.TrimSpace(`
 chilly user settings set filter-nasty-results true
 chilly user settings set sort-by title --dry-run --output json
+chilly user settings set catalog-sort popularity --dry-run --output json
 chilly user settings set --json '{"search":{"filterNastyResults":true,"filterResultsWithNoSeeders":false,"rememberQuickFilters":false,"disabledIndexerIds":[],"resolutionFilters":[],"codecFilters":[],"otherFilters":[],"sortBy":"SORT_BY_SEEDERS","sortDirection":"SORT_DIRECTION_DESC","searchResultDisplayBehavior":"SEARCH_RESULT_DISPLAY_BEHAVIOR_FASTEST","searchResultTitleBehavior":"SEARCH_RESULT_TITLE_BEHAVIOR_TEXT"},"catalog":{"moviesSource":"MOVIES_SOURCE_YTS","tvShowsSource":"TV_SHOWS_SOURCE_ALL_PROVIDERS"},"download":{"folderId":42}}'
 printf '{"settings":{"search":{"filterNastyResults":true,"filterResultsWithNoSeeders":false,"rememberQuickFilters":false,"disabledIndexerIds":[],"resolutionFilters":[],"codecFilters":[],"otherFilters":[],"sortBy":"SORT_BY_SEEDERS","sortDirection":"SORT_DIRECTION_DESC","searchResultDisplayBehavior":"SEARCH_RESULT_DISPLAY_BEHAVIOR_FASTEST","searchResultTitleBehavior":"SEARCH_RESULT_TITLE_BEHAVIOR_TEXT"},"catalog":{"moviesSource":"MOVIES_SOURCE_YTS","tvShowsSource":"TV_SHOWS_SOURCE_ALL_PROVIDERS"},"download":{"folderId":42}}}' | chilly user settings set --json @- --output json
 `),

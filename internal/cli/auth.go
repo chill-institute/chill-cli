@@ -287,7 +287,7 @@ func webAuthTokenURL(apiBaseURL string) (string, error) {
 	return (&url.URL{
 		Scheme: parsed.Scheme,
 		Host:   host,
-		Path:   "/auth/setup-token",
+		Path:   "/auth/chilly-token",
 	}).String(), nil
 }
 

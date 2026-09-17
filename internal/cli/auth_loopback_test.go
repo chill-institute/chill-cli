@@ -91,7 +91,7 @@ func TestAuthLoginWebTokenFlowPromptsForTokenAndVerifies(t *testing.T) {
 	if !strings.Contains(stderr.String(), "Paste setup token: ") {
 		t.Fatalf("stderr = %q", stderr.String())
 	}
-	if !strings.Contains(stderr.String(), "/auth/setup-token") {
+	if !strings.Contains(stderr.String(), "/auth/chilly-token") {
 		t.Fatalf("stderr = %q", stderr.String())
 	}
 }
@@ -244,7 +244,7 @@ func TestAuthLoginWebTokenFlowSupportsPromptOnly(t *testing.T) {
 	if stdout.Len() != 0 {
 		t.Fatalf("stdout = %q, want empty", stdout.String())
 	}
-	if !strings.Contains(stderr.String(), "/auth/setup-token") {
+	if !strings.Contains(stderr.String(), "/auth/chilly-token") {
 		t.Fatalf("stderr = %q", stderr.String())
 	}
 }

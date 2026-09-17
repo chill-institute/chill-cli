@@ -1,3 +1,6 @@
+// Package rpc is the HTTP transport for hosted chill.institute v4 procedures:
+// same-origin redirects only, bounded response bodies, client identity headers,
+// and the shared error envelope mapped to APIError.
 package rpc
 
 import (

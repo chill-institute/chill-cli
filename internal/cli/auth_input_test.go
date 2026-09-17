@@ -153,15 +153,15 @@ func TestWebAuthTokenURLDerivesPublicHostFromAPIBaseURL(t *testing.T) {
 		input  string
 		output string
 	}{
-		{name: "production api host", input: "https://api.chill.institute", output: "https://chill.institute/auth/setup-token"},
-		{name: "production api host with port", input: "https://api.chill.institute:8443", output: "https://chill.institute:8443/auth/setup-token"},
-		{name: "staging api host", input: "https://staging-api.chill.institute", output: "https://staging.chill.institute/auth/setup-token"},
-		{name: "staging api host with port", input: "https://staging-api.chill.institute:8443", output: "https://staging.chill.institute:8443/auth/setup-token"},
-		{name: "production web host", input: "https://chill.institute", output: "https://chill.institute/auth/setup-token"},
-		{name: "staging web host", input: "https://staging.chill.institute", output: "https://staging.chill.institute/auth/setup-token"},
-		{name: "localhost", input: "http://localhost:8080", output: "http://localhost:8080/auth/setup-token"},
-		{name: "dev api host with port", input: "https://api.chill.test:4443", output: "https://chill.test:4443/auth/setup-token"},
-		{name: "dev web host with port", input: "https://chill.test:4443", output: "https://chill.test:4443/auth/setup-token"},
+		{name: "production api host", input: "https://api.chill.institute", output: "https://chill.institute/auth/chilly-token"},
+		{name: "production api host with port", input: "https://api.chill.institute:8443", output: "https://chill.institute:8443/auth/chilly-token"},
+		{name: "staging api host", input: "https://staging-api.chill.institute", output: "https://staging.chill.institute/auth/chilly-token"},
+		{name: "staging api host with port", input: "https://staging-api.chill.institute:8443", output: "https://staging.chill.institute:8443/auth/chilly-token"},
+		{name: "production web host", input: "https://chill.institute", output: "https://chill.institute/auth/chilly-token"},
+		{name: "staging web host", input: "https://staging.chill.institute", output: "https://staging.chill.institute/auth/chilly-token"},
+		{name: "localhost", input: "http://localhost:8080", output: "http://localhost:8080/auth/chilly-token"},
+		{name: "dev api host with port", input: "https://api.chill.test:4443", output: "https://chill.test:4443/auth/chilly-token"},
+		{name: "dev web host with port", input: "https://chill.test:4443", output: "https://chill.test:4443/auth/chilly-token"},
 	}
 
 	for _, tc := range testCases {
@@ -215,7 +215,7 @@ func TestAuthLoginDryRunOutputsWebTokenLoginURL(t *testing.T) {
 	if output.Request["mode"] != "web_token" {
 		t.Fatalf("request.mode = %v, want web_token", output.Request["mode"])
 	}
-	if output.Request["login_url"] != "https://staging.chill.institute:8443/auth/setup-token" {
+	if output.Request["login_url"] != "https://staging.chill.institute:8443/auth/chilly-token" {
 		t.Fatalf("request.login_url = %v", output.Request["login_url"])
 	}
 }

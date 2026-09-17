@@ -31,7 +31,7 @@ jobs:
       deployment: false
     permissions:
       attestations: write
-      contents: write
+      contents: read
       id-token: write
     steps:
       - name: Check out repository

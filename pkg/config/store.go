@@ -1,3 +1,5 @@
+// Package config persists chilly profiles: the API base URL and the auth
+// token, written atomically with private file modes.
 package config
 
 import (

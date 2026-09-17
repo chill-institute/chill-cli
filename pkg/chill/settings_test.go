@@ -28,12 +28,17 @@ func TestUserSettingsPatchNormalizesAliasesAndValues(t *testing.T) {
 			t.Fatalf("%s: patch = %#v", tc.field, patch)
 		}
 	}
-	for _, tc := range [][2]string{{"nope", "1"}, {"catalog.sort", "unspecified"}, {"filter-nasty-results", "maybe"}, {"download.folder-id", "-1"}} {
+	for _, tc := range [][3]string{{"nope", "1", "unsupported_user_settings_field"}, {"catalog.sort", "unspecified", "invalid_user_settings_value"}, {"filter-nasty-results", "maybe", "invalid_user_settings_value"}, {"download.folder-id", "-1", "invalid_user_settings_value"}, {"movies-source", "letterboxd", "invalid_user_settings_value"}} {
 		_, err := NormalizeUserSettingsPatch(tc[0], tc[1])
 		var validation *ValidationError
-		if !errors.As(err, &validation) {
-			t.Fatalf("%v: error = %v, want ValidationError", tc, err)
+		if !errors.As(err, &validation) || validation.Code != tc[2] {
+			t.Fatalf("%v: error = %v, want ValidationError %s", tc, err, tc[2])
 		}
+	}
+	fields := UserSettingsFields()
+	fields[0].Aliases[0] = "tampered"
+	if UserSettingsFields()[0].Aliases[0] == "tampered" {
+		t.Fatal("UserSettingsFields exposes the shared catalog")
 	}
 	if len(UserSettingsFields()) != 11 {
 		t.Fatalf("field count = %d", len(UserSettingsFields()))

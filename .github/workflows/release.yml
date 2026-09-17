@@ -17,7 +17,7 @@ jobs:
       cancel-in-progress: false
     permissions:
       attestations: write
-      contents: write
+      contents: read
       id-token: write
     # Await actionlint support: https://github.com/rhysd/actionlint/issues/711
     uses: ./.github/workflows/_release.yml # zizmor: ignore[self-repository]

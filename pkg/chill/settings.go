@@ -49,7 +49,11 @@ var userSettingsFields = []UserSettingsField{
 		"link": "SEARCH_RESULT_TITLE_BEHAVIOR_LINK", "text": "SEARCH_RESULT_TITLE_BEHAVIOR_TEXT",
 	})},
 	{Aliases: []string{"movies-source", "catalog.movies-source"}, Path: []string{"catalog", "moviesSource"}, ValueType: "enum", Description: "one of: imdb-moviemeter, imdb-top-250, yts, rotten-tomatoes, trakt", normalize: func(raw string) (any, error) {
-		return NormalizeMovieSource(raw)
+		value, err := NormalizeMovieSource(raw)
+		if err != nil {
+			return nil, invalid("invalid_user_settings_value", "unsupported value %q", raw)
+		}
+		return value, nil
 	}},
 	{Aliases: []string{"tv-shows-source", "catalog.tv-shows-source"}, Path: []string{"catalog", "tvShowsSource"}, ValueType: "enum", Description: "one of: all-providers, netflix, hbo-max, apple-tv-plus, prime-video, disney-plus, hulu, paramount-plus, amc-plus, peacock", normalize: func(raw string) (any, error) {
 		return NormalizeTVShowsSource(raw, false)
@@ -62,7 +66,11 @@ var userSettingsFields = []UserSettingsField{
 // UserSettingsFields returns the patchable settings in documentation order.
 func UserSettingsFields() []UserSettingsField {
 	out := make([]UserSettingsField, len(userSettingsFields))
-	copy(out, userSettingsFields)
+	for i, field := range userSettingsFields {
+		field.Path = append([]string(nil), field.Path...)
+		field.Aliases = append([]string(nil), field.Aliases...)
+		out[i] = field
+	}
 	return out
 }
 
