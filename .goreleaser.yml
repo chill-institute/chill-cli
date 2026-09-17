@@ -46,6 +46,9 @@ brews:
       name: homebrew-tap
       token: "{{ .Env.TAP_GITHUB_TOKEN }}"
     directory: Formula
+    commit_author:
+      name: chill-ci[bot]
+      email: 323150493+chill-ci[bot]@users.noreply.github.com
     homepage: https://chill.institute
     description: Search chill.institute and send transfers from the terminal
     license: MIT
