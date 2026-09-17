@@ -17,7 +17,7 @@ on:
         type: boolean
         default: false
     secrets:
-      TAP_GITHUB_TOKEN:
+      CHILL_CI_APP_PRIVATE_KEY:
         required: true
 
 permissions: {}
@@ -60,6 +60,16 @@ jobs:
         if: ${{ inputs.verify }}
         run: mise run verify
 
+      - name: Mint a chill-ci token
+        id: app
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ vars.CHILL_CI_APP_CLIENT_ID }}
+          private-key: ${{ secrets.CHILL_CI_APP_PRIVATE_KEY }}
+          owner: chill-institute
+          repositories: chill-cli,homebrew-tap
+          permission-contents: write
+
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
         with:
@@ -67,8 +77,8 @@ jobs:
           args: release --clean
           workdir: ${{ github.workspace }}
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAP_GITHUB_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ steps.app.outputs.token }}
+          TAP_GITHUB_TOKEN: ${{ steps.app.outputs.token }}
 
       - name: Prepare npm packages
         env:
@@ -137,7 +147,7 @@ jobs:
 
       - name: Verify draft assets
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ steps.app.outputs.token }}
           RELEASE_TAG: ${{ inputs.tag }}
         run: |
           set -euo pipefail
@@ -149,7 +159,7 @@ jobs:
 
       - name: Publish immutable release
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ steps.app.outputs.token }}
           RELEASE_TAG: ${{ inputs.tag }}
         run: |
           gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --draft=false

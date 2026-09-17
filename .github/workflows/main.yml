@@ -76,16 +76,26 @@ jobs:
         with:
           cache: false
 
+      - name: Mint a chill-ci token
+        id: app
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ vars.CHILL_CI_APP_CLIENT_ID }}
+          private-key: ${{ secrets.CHILL_CI_APP_PRIVATE_KEY }}
+          owner: chill-institute
+          repositories: chill-cli
+          permission-contents: write
+
       - name: Tag next release
         id: semantic_release
         uses: cycjimmy/semantic-release-action@b12c8f6015dc215fe37bc154d4ad456dd3833c90 # v6.0.0
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ steps.app.outputs.token }}
 
       - name: Resolve release target
         id: release_target
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ steps.app.outputs.token }}
           NEW_RELEASE_PUBLISHED: ${{ steps.semantic_release.outputs.new_release_published }}
           NEW_RELEASE_TAG: ${{ steps.semantic_release.outputs.new_release_git_tag }}
         run: |
@@ -147,4 +157,4 @@ jobs:
       tag: ${{ needs.release.outputs.tag }}
       ref: ${{ needs.release.outputs.tag }}
     secrets:
-      TAP_GITHUB_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
+      CHILL_CI_APP_PRIVATE_KEY: ${{ secrets.CHILL_CI_APP_PRIVATE_KEY }}

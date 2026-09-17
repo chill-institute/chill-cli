@@ -26,4 +26,4 @@ jobs:
       ref: ${{ inputs.tag }}
       verify: true
     secrets:
-      TAP_GITHUB_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
+      CHILL_CI_APP_PRIVATE_KEY: ${{ secrets.CHILL_CI_APP_PRIVATE_KEY }}
