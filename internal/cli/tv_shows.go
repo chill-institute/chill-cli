@@ -279,10 +279,6 @@ func normalizeTVShowsSource(raw string) (string, error) {
 	return normalizeTVShowsSourceValue(raw, true)
 }
 
-func normalizeTVShowsSourcePatchValue(raw string) (any, error) {
-	return normalizeTVShowsSourceValue(raw, false)
-}
-
 func normalizeTVShowsSourceValue(raw string, allowEmpty bool) (string, error) {
 	value, err := chill.NormalizeTVShowsSource(raw, allowEmpty)
 	return value, wrapValidationError(err)

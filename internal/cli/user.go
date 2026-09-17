@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/chill-institute/chill-cli/v2/pkg/chill"
 	"github.com/chill-institute/chill-cli/v2/pkg/rpc"
 	"github.com/spf13/cobra"
 )
@@ -524,35 +525,13 @@ func runUserSettingsPatch(app *appContext, commandID string, patch userSettingsP
 }
 
 func normalizeFolderID(raw string) (int64, error) {
-	trimmed := strings.TrimSpace(raw)
-	if trimmed == "" {
-		return 0, usageError("missing_folder_id", "folder id is required")
-	}
-
-	value, err := strconv.ParseInt(trimmed, 10, 64)
-	if err != nil {
-		return 0, usageError("invalid_folder_id", "folder id must be an integer")
-	}
-	if value < 0 {
-		return 0, usageError("invalid_folder_id", "folder id must be zero or positive")
-	}
-	return value, nil
+	value, err := chill.NormalizeFolderID(raw)
+	return value, wrapValidationError(err)
 }
 
 func normalizeTransferID(raw string) (int64, error) {
-	trimmed := strings.TrimSpace(raw)
-	if trimmed == "" {
-		return 0, usageError("missing_transfer_id", "transfer id is required")
-	}
-
-	value, err := strconv.ParseInt(trimmed, 10, 64)
-	if err != nil {
-		return 0, usageError("invalid_transfer_id", "transfer id must be an integer")
-	}
-	if value <= 0 {
-		return 0, usageError("invalid_transfer_id", "transfer id must be positive")
-	}
-	return value, nil
+	value, err := chill.NormalizeTransferID(raw)
+	return value, wrapValidationError(err)
 }
 
 func runUserRPCWithFields(app *appContext, procedure string, body any, selection *fieldSelection) error {

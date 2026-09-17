@@ -17,7 +17,7 @@ graph LR
 | --- | --- |
 | `cmd/chilly/` | Process entrypoint |
 | `internal/cli/` | Commands, metadata, rendering, and orchestration |
-| `pkg/chill/` | Public procedure names and local input validation shared with other Go clients |
+| `pkg/chill/` | Public procedure names, input validation, settings patches, and request builders shared with other Go clients |
 | `pkg/config/` | Public profiles, API URL, and auth-token persistence |
 | `pkg/rpc/` | Public procedure transport, client identity headers, and API errors |
 | `internal/buildinfo/` | Version, commit, and build date |
