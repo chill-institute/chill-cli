@@ -20,7 +20,26 @@ func NewRootCommand() *cobra.Command {
 }
 
 func Run(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) int {
-	return runCommand(args, stdin, stdout, stderr)
+	opts := &appOptions{output: outputPretty}
+	app := newAppContext(opts)
+	if stdin != nil {
+		app.stdin = stdin
+	}
+	if stdout != nil {
+		app.stdout = stdout
+	}
+	if stderr != nil {
+		app.stderr = stderr
+	}
+
+	command := newRootCommand(app)
+	seedOutputModeForEarlyErrors(app, args)
+	command.SetArgs(args)
+	if err := command.Execute(); err != nil {
+		writeError(app, err)
+		return exitCodeForError(err)
+	}
+	return int(exitCodeSuccess)
 }
 
 func newRootCommand(app *appContext) *cobra.Command {

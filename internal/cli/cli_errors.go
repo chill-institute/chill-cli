@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"strings"
 
 	"github.com/chill-institute/chill-cli/v2/pkg/chill"
@@ -179,29 +178,6 @@ func writeError(app *appContext, err error) {
 func wantsJSONOutput(value string) bool {
 	trimmed := strings.TrimSpace(value)
 	return strings.EqualFold(trimmed, outputJSON) || strings.EqualFold(trimmed, outputNDJSON)
-}
-
-func runCommand(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) int {
-	opts := &appOptions{output: outputPretty}
-	app := newAppContext(opts)
-	if stdin != nil {
-		app.stdin = stdin
-	}
-	if stdout != nil {
-		app.stdout = stdout
-	}
-	if stderr != nil {
-		app.stderr = stderr
-	}
-
-	command := newRootCommand(app)
-	seedOutputModeForEarlyErrors(app, args)
-	command.SetArgs(args)
-	if err := command.Execute(); err != nil {
-		writeError(app, err)
-		return exitCodeForError(err)
-	}
-	return int(exitCodeSuccess)
 }
 
 func seedOutputModeForEarlyErrors(app *appContext, args []string) {

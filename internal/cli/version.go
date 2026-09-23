@@ -22,15 +22,7 @@ chilly version --output json
 			if err != nil {
 				return err
 			}
-			if !wantsJSONOutput(app.opts.output) {
-				if selection != nil {
-					return app.writeAnyWithRenderer(map[string]any{
-						"name":       "chilly",
-						"version":    info.Version,
-						"commit":     info.Commit,
-						"build_date": info.BuildDate,
-					}, selection, nil)
-				}
+			if selection == nil && !wantsJSONOutput(app.opts.output) {
 				_, err := fmt.Fprintln(app.stdout, formatVersionLine(info.Version, info.Commit))
 				return wrapInternalError("stdout_write_failed", "write version output", err)
 			}
