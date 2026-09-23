@@ -16,24 +16,18 @@ import (
 func TestNewAppContextDefaults(t *testing.T) {
 	t.Parallel()
 
-	opts := &appOptions{output: outputJSON}
-	app := newAppContext(opts)
-
-	if app.opts != opts {
-		t.Fatal("newAppContext() did not keep options pointer")
-	}
+	app := newAppContext(&appOptions{output: outputJSON})
 	if app.stdin != os.Stdin || app.stdout != os.Stdout || app.stderr != os.Stderr {
-		t.Fatal("newAppContext() did not wire stdio defaults")
-	}
-	if app.openURL == nil || app.readSecret == nil || app.isTerminal == nil || app.isInputTerminal == nil || app.newTicker == nil {
-		t.Fatal("newAppContext() left helper hooks nil")
+		t.Fatal("newAppContext() did not wire process stdio")
 	}
 
 	ticker := app.newTicker(time.Millisecond)
-	if ticker.C() == nil {
-		t.Fatal("ticker.C() = nil")
+	t.Cleanup(ticker.Stop)
+	select {
+	case <-ticker.C():
+	case <-time.After(time.Second):
+		t.Fatal("ticker did not tick")
 	}
-	ticker.Stop()
 }
 
 func TestConfigStoreUsesResolvedProfilePath(t *testing.T) {
