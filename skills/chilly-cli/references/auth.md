@@ -5,7 +5,7 @@ Use this reference when the task is about authentication, profile selection, or 
 ## Rules
 
 - Parse only `stdout`. Browser hints and notices may appear on `stderr`.
-- Check the active host first with `chilly settings get api-base-url --output json`
+- Check the active host first with `chilly settings get api-base-url --output json`.
 - Use HTTPS for remote API hosts. Plain HTTP is accepted only for loopback development hosts.
 - Use `--profile <name>` or `--config <path>` when you need isolated state.
 - Use `whoami` after auth changes when you need positive confirmation that the token works.

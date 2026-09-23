@@ -7,7 +7,7 @@ Use this reference when you need runtime truth about the current CLI surface.
 - Use `schema` or `--describe` when a command shape is uncertain.
 - Use `--fields` to trim metadata and diagnostics before bringing them into context.
 - Prefer command metadata over stale docs when they disagree.
-- Parse only `stdout`
+- Parse only `stdout`.
 
 ## Contract Discovery
 

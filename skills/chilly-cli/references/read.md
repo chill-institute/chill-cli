@@ -4,7 +4,7 @@ Use this reference for read-only workflows against the hosted API.
 
 ## Rules
 
-- Prefer `--output json`
+- Prefer `--output json`.
 - Use `--output ndjson` for collection reads; processing one item per line protects context better than one full JSON document.
 - Prefer `--fields` whenever the command supports it.
 - Start wide enough to discover IDs, then rerun narrowly with selected fields.

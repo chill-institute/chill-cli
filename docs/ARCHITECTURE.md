@@ -104,8 +104,8 @@ verify the token through the API before persistence.
 ## Delivery
 
 Pull requests run `mise run verify`. After verification on `main`,
-semantic-release chooses the version and GoReleaser builds one set of binaries,
-both acting as the `chill-ci` GitHub App so tags, releases, and the Homebrew
-formula push carry its identity and can trigger downstream workflows,
+semantic-release chooses the version and GoReleaser builds one set of binaries
 for the immutable GitHub release, Homebrew formula, and npm platform packages.
-The manual `Release` workflow rebuilds an existing tag when recovery is needed.
+Both act as the `chill-ci` GitHub App, so the tag, release, and formula push
+carry its identity and can trigger downstream workflows. The manual `Release`
+workflow rebuilds an existing tag when recovery is needed.
