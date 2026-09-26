@@ -2,12 +2,13 @@ name: Verify
 
 on:
   pull_request:
+  workflow_dispatch:
 
 permissions: {}
 
 concurrency:
   group: verify-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   verify:
@@ -53,3 +54,7 @@ jobs:
         env:
           CHILLY_CONTRACTS_PROTO: ${{ github.workspace }}/.contracts/chill-contracts/proto/chill/v4/api.proto
         run: mise run contracts:check
+
+      - name: Scan pushed range
+        if: ${{ !cancelled() }}
+        uses: chill-institute/.github/.github/actions/scan@04bad7d160da50b0509abfd5ff2e382aaf7d1aef # v1.0.0
