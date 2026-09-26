@@ -123,7 +123,7 @@ jobs:
         run: |
           set -euo pipefail
           if gh api "repos/$GITHUB_REPOSITORY/releases/tags/$RELEASE_TAG" --jq '.draft' 2>"$RUNNER_TEMP/lookup.err" | grep -qx false; then
-            printf '%s is already published; re-run all jobs so resolve reconciles it without a rebuild\n' "$RELEASE_TAG" >&2
+            printf '%s is already published; recover it without a rebuild by dispatching Main with tag=%s dry_run=false\n' "$RELEASE_TAG" "$RELEASE_TAG" >&2
             exit 1
           fi
           if [[ -s "$RUNNER_TEMP/lookup.err" ]] && ! grep -q 'HTTP 404' "$RUNNER_TEMP/lookup.err"; then
@@ -398,6 +398,7 @@ jobs:
     steps:
       - name: Fail on release tags without a published release
         env:
+          DRY_RUN: ${{ inputs.dry_run }}
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ inputs.tag }}
           UNRELEASED_TAG_ALLOWLIST: v0.2.2
@@ -410,6 +411,9 @@ jobs:
           tr ' ' '\n' <<<"$UNRELEASED_TAG_ALLOWLIST" | sort -u >"$RUNNER_TEMP/allowed"
           missing=()
           while IFS= read -r tag; do
+            if [[ "$DRY_RUN" == true && "$tag" == "$RELEASE_TAG" ]]; then
+              continue
+            fi
             if [[ "$(printf '%s\n' "$tag" "$RELEASE_TAG" | sort -V | tail -n 1)" == "$RELEASE_TAG" ]]; then
               missing+=("$tag")
             fi
