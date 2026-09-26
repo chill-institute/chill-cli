@@ -4,15 +4,16 @@ on:
   workflow_call:
     inputs:
       tag:
-        description: Release tag to build and publish (vX.Y.Z)
-        required: true
-        type: string
-      ref:
-        description: Commit or tag to check out
+        description: Release tag to publish or reconcile (vX.Y.Z)
         required: true
         type: string
       verify:
-        description: Run mise run verify before releasing
+        description: Run mise run verify before building an unpublished release
+        required: false
+        type: boolean
+        default: false
+      dry_run:
+        description: Report repairs without changing the release, npm, or the tap
         required: false
         type: boolean
         default: false
@@ -23,7 +24,66 @@ on:
 permissions: {}
 
 jobs:
-  release:
+  resolve:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      sha: ${{ steps.resolve.outputs.sha }}
+      version: ${{ steps.resolve.outputs.version }}
+      published: ${{ steps.resolve.outputs.published }}
+    steps:
+      - name: Resolve tag and release state
+        id: resolve
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([+-][0-9A-Za-z.-]+)?$ ]]; then
+            printf 'Refusing invalid release tag: %s\n' "$RELEASE_TAG" >&2
+            exit 1
+          fi
+
+          ref="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$RELEASE_TAG")"
+          sha="$(jq -r '.object.sha' <<<"$ref")"
+          if [[ "$(jq -r '.object.type' <<<"$ref")" == tag ]]; then
+            sha="$(gh api "repos/$GITHUB_REPOSITORY/git/tags/$sha" --jq '.object.sha')"
+          fi
+          if [[ ! "$sha" =~ ^[0-9a-f]{40}$ ]]; then
+            printf '%s does not resolve to a commit\n' "$RELEASE_TAG" >&2
+            exit 1
+          fi
+          status="$(gh api "repos/$GITHUB_REPOSITORY/compare/$sha...main" --jq '.status')"
+          if [[ "$status" != identical && "$status" != ahead ]]; then
+            printf '%s resolves to %s, which main does not contain\n' "$RELEASE_TAG" "$sha" >&2
+            exit 1
+          fi
+
+          if release="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$RELEASE_TAG" 2>"$RUNNER_TEMP/lookup.err")"; then
+            if [[ "$(jq -r '.draft == false and .immutable == true' <<<"$release")" != true ]]; then
+              printf '%s is published but not immutable\n' "$RELEASE_TAG" >&2
+              exit 1
+            fi
+            published=true
+          elif grep -q 'HTTP 404' "$RUNNER_TEMP/lookup.err"; then
+            published=false
+          else
+            cat "$RUNNER_TEMP/lookup.err" >&2
+            exit 1
+          fi
+
+          printf 'Tag %s resolves to %s; published: %s\n' "$RELEASE_TAG" "$sha" "$published"
+          {
+            echo "sha=$sha"
+            echo "version=${RELEASE_TAG#v}"
+            echo "published=$published"
+          } >>"$GITHUB_OUTPUT"
+
+  build:
+    needs: [resolve]
+    if: ${{ needs.resolve.outputs.published == 'false' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment:
@@ -34,27 +94,26 @@ jobs:
       contents: read
       id-token: write
     steps:
-      - name: Check out repository
+      - name: Check out release commit
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
-          ref: ${{ inputs.ref }}
+          ref: ${{ needs.resolve.outputs.sha }}
+
+      - name: Confirm release commit
+        env:
+          RELEASE_SHA: ${{ needs.resolve.outputs.sha }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$RELEASE_SHA"
+          git tag --points-at HEAD | grep -Fqx "$RELEASE_TAG"
 
       - name: Set up mise
         uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
         with:
           cache: false
-
-      - name: Validate tag
-        id: tag
-        env:
-          RELEASE_TAG: ${{ inputs.tag }}
-        run: |
-          set -euo pipefail
-          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([+-][0-9A-Za-z.-]+)?$ ]]
-          test "$(git describe --tags --exact-match HEAD)" = "$RELEASE_TAG"
-          echo "version=${RELEASE_TAG#v}" >>"$GITHUB_OUTPUT"
 
       - name: Verify
         if: ${{ inputs.verify }}
@@ -67,23 +126,115 @@ jobs:
           client-id: ${{ vars.CHILL_CI_APP_CLIENT_ID }}
           private-key: ${{ secrets.CHILL_CI_APP_PRIVATE_KEY }}
           owner: chill-institute
-          repositories: chill-cli,homebrew-tap
+          repositories: chill-cli
           permission-contents: write
 
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
         with:
           version: v2.18.1
-          args: release --clean
+          args: ${{ inputs.dry_run && 'release --clean --skip=publish' || 'release --clean' }}
           workdir: ${{ github.workspace }}
         env:
           GITHUB_TOKEN: ${{ steps.app.outputs.token }}
-          TAP_GITHUB_TOKEN: ${{ steps.app.outputs.token }}
+          GORELEASER_CURRENT_TAG: ${{ inputs.tag }}
+
+      - name: Attest release archives
+        if: ${{ !inputs.dry_run }}
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: |
+            dist/chilly_*.tar.gz
+            dist/chilly_*.zip
+
+      - name: Verify draft assets
+        if: ${{ !inputs.dry_run }}
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          test "$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json isDraft --jq '.isDraft')" = true
+          (
+            cd dist
+            find . -maxdepth 1 -type f \( -name 'chilly_*.tar.gz' -o -name 'chilly_*.zip' -o -name 'checksums.txt' \) -printf '%f\n' |
+              xargs sha256sum
+          ) | sort -k2 >"$RUNNER_TEMP/expected-assets"
+          gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json assets \
+            --jq '.assets[] | "\(.digest | ltrimstr("sha256:"))  \(.name)"' |
+            sort -k2 >"$RUNNER_TEMP/release-assets"
+          test "$(wc -l <"$RUNNER_TEMP/expected-assets" | tr -d ' ')" = 7
+          diff -u "$RUNNER_TEMP/expected-assets" "$RUNNER_TEMP/release-assets"
+
+      - name: Publish immutable release
+        if: ${{ !inputs.dry_run }}
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          RELEASE_SHA: ${{ needs.resolve.outputs.sha }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          test "$(gh api "repos/$GITHUB_REPOSITORY/commits/$RELEASE_TAG" --jq '.sha')" = "$RELEASE_SHA"
+          gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --draft=false
+          for attempt in {1..12}; do
+            if gh release verify "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY"; then
+              exit 0
+            fi
+            if [[ "$attempt" == 12 ]]; then
+              exit 1
+            fi
+            echo "Release attestation is not available yet; retrying in 5 seconds."
+            sleep 5
+          done
+
+  downstream:
+    needs: [resolve, build]
+    if: >-
+      ${{ !cancelled() && needs.resolve.result == 'success' && (
+        (needs.resolve.outputs.published == 'true' && needs.build.result == 'skipped') ||
+        (needs.build.result == 'success' && !inputs.dry_run)
+      ) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment:
+      name: release
+      deployment: false
+    permissions:
+      attestations: read
+      contents: read
+      id-token: write
+    env:
+      DRY_RUN: ${{ inputs.dry_run }}
+      RELEASE_TAG: ${{ inputs.tag }}
+      RELEASE_VERSION: ${{ needs.resolve.outputs.version }}
+    steps:
+      - name: Check out release commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ needs.resolve.outputs.sha }}
+
+      - name: Download published release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json isDraft,isImmutable --jq '.isDraft == false and .isImmutable')" = true
+          assets="$RUNNER_TEMP/release"
+          gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --dir "$assets" --pattern 'chilly_*' --pattern checksums.txt
+          test "$(find "$assets" -maxdepth 1 -type f | wc -l | tr -d ' ')" = 7
+          (cd "$assets" && sha256sum --check --strict checksums.txt)
+          for asset in "$assets"/*; do
+            gh release verify-asset "$RELEASE_TAG" "$asset" --repo "$GITHUB_REPOSITORY"
+          done
+
+      - name: Set up mise
+        uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
+        with:
+          cache: false
 
       - name: Prepare npm packages
-        env:
-          RELEASE_VERSION: ${{ steps.tag.outputs.version }}
-        run: go run ./scripts/npm-package --version "${RELEASE_VERSION}"
+        run: go run ./scripts/npm-package --dist "$RUNNER_TEMP/release" --version "$RELEASE_VERSION"
 
       - name: Set up Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -115,6 +266,11 @@ jobs:
               return 0
             fi
 
+            if [[ "$DRY_RUN" == true ]]; then
+              printf 'dry run: would publish %s@%s\n' "$package_name" "$package_version"
+              return 0
+            fi
+
             for attempt in 1 2 3; do
               if npm publish --provenance --access public "$package_dir"; then
                 return 0
@@ -138,38 +294,53 @@ jobs:
           done
           publish_package dist/npm/cli
 
-      - name: Attest release archives
-        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+      - name: Mint a homebrew-tap token
+        id: tap_app
+        if: ${{ !inputs.dry_run }}
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
-          subject-path: |
-            dist/chilly_*.tar.gz
-            dist/chilly_*.zip
+          client-id: ${{ vars.CHILL_CI_APP_CLIENT_ID }}
+          private-key: ${{ secrets.CHILL_CI_APP_PRIVATE_KEY }}
+          owner: chill-institute
+          repositories: homebrew-tap
+          permission-contents: write
 
-      - name: Verify draft assets
+      - name: Update Homebrew formula
         env:
-          GH_TOKEN: ${{ steps.app.outputs.token }}
-          RELEASE_TAG: ${{ inputs.tag }}
+          GH_TOKEN: ${{ steps.tap_app.outputs.token || github.token }}
+          TAP_FILE: repos/chill-institute/homebrew-tap/contents/Formula/chilly.rb
         run: |
           set -euo pipefail
-          test "$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json isDraft --jq '.isDraft')" = true
-          find dist -maxdepth 1 -type f \( -name 'chilly_*.tar.gz' -o -name 'chilly_*.zip' -o -name 'checksums.txt' \) -printf '%f\n' | sort >"$RUNNER_TEMP/expected-assets"
-          gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' | sort >"$RUNNER_TEMP/release-assets"
-          test "$(wc -l <"$RUNNER_TEMP/expected-assets" | tr -d ' ')" = 7
-          diff -u "$RUNNER_TEMP/expected-assets" "$RUNNER_TEMP/release-assets"
+          formula="$RUNNER_TEMP/chilly.rb"
+          go run ./scripts/homebrew-formula --version "$RELEASE_VERSION" --checksums "$RUNNER_TEMP/release/checksums.txt" >"$formula"
 
-      - name: Publish immutable release
-        env:
-          GH_TOKEN: ${{ steps.app.outputs.token }}
-          RELEASE_TAG: ${{ inputs.tag }}
+          current="$(gh api "$TAP_FILE?ref=main")"
+          jq -r '.content' <<<"$current" | base64 --decode >"$RUNNER_TEMP/current.rb"
+          if cmp -s "$formula" "$RUNNER_TEMP/current.rb"; then
+            printf 'Homebrew formula already matches %s\n' "$RELEASE_TAG"
+            exit 0
+          fi
+          diff -u "$RUNNER_TEMP/current.rb" "$formula" || true
+          if [[ "$DRY_RUN" == true ]]; then
+            printf 'dry run: would update the Homebrew formula to %s\n' "$RELEASE_TAG"
+            exit 0
+          fi
+
+          commit="$(
+            gh api --method PUT "$TAP_FILE" \
+              -f message="chilly $RELEASE_VERSION" \
+              -f content="$(base64 --wrap=0 "$formula")" \
+              -f sha="$(jq -r '.sha' <<<"$current")" \
+              -f branch=main \
+              --jq '.commit.sha'
+          )"
+          verified="$(gh api "repos/chill-institute/homebrew-tap/commits/$commit" --jq '.commit.verification.verified')"
+          printf 'Tap commit %s verified: %s\n' "$commit" "$verified"
+          test "$verified" = true
+
+      - name: Check Go module proxy
         run: |
-          gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --draft=false
-          for attempt in {1..12}; do
-            if gh release verify "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY"; then
-              exit 0
-            fi
-            if [[ "$attempt" == 12 ]]; then
-              exit 1
-            fi
-            echo "Release attestation is not available yet; retrying in 5 seconds."
-            sleep 5
-          done
+          set -euo pipefail
+          curl --fail --silent --show-error --retry 5 --retry-all-errors --retry-delay 10 \
+            "https://proxy.golang.org/github.com/chill-institute/chill-cli/v2/@v/$RELEASE_TAG.info" |
+            jq -e --arg tag "$RELEASE_TAG" '.Version == $tag'
