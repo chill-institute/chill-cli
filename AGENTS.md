@@ -19,14 +19,18 @@ The pre-push hook runs `mise run verify`.
 | Go logic, flags, validation | `mise run verify` (format, tidy, lint, tests at 85% coverage, govulncheck) | local, pre-push, [PR](./.github/workflows/verify.yml), [main](./.github/workflows/main.yml) `verify` | exit status, `coverage.out` |
 | Command surface or output contract | `mise run smoke`, then `go run ./cmd/chilly <command> --help` and `--output json` | local | exit status, stdout |
 | Schema metadata | `mise run contracts:check` against `../chill-contracts` | local, [PR](./.github/workflows/verify.yml), [main](./.github/workflows/main.yml) `verify` at a pinned tag | exit status |
+| Release rules, locked semantic-release | `npm ci --prefix .github/release --ignore-scripts`, then `node .github/release/smoke.mjs` | local, PR [Verify](./.github/workflows/verify.yml) | exit status |
 | Workflows | `mise run actions` (actionlint, zizmor; inside verify) | local, CI with verify | exit status |
 | Pushed workflow changes | [shared scan](https://github.com/chill-institute/.github/tree/main/.github/actions/scan), last step of the `verify` job in [Main](./.github/workflows/main.yml) and [Verify](./.github/workflows/verify.yml): Actionlint and Zizmor when the pushed range touches workflows; secrets rely on GitHub secret scanning | CI on push to `main` (pushed range) and Verify dispatch (full history) | failed run |
 | Hosted API behavior | `mise run test:integration`; scope in [Hosted Integration](./CONTRIBUTING.md#hosted-integration) | local only, `CHILLY_TEST_API_URL` and `CHILLY_TEST_TOKEN` | exit status |
 | GoReleaser config | `goreleaser release --snapshot --clean` twice; `dist/checksums.txt` must match | local | `dist/` |
 | Release and packaging | push to `main`; recover by dispatching [Main](./.github/workflows/main.yml) with `tag` (`dry_run` defaults on) | [main](./.github/workflows/main.yml) `release`, `publish` | tag, immutable GitHub release with 7 assets and provenance, npm packages and a signed Homebrew formula commit built from the published assets |
 
-Each commit type listed in [`.releaserc.json`](./.releaserc.json),
-including `docs`, publishes a release from `main`.
+Only `feat` (minor), `fix`, `perf`, `refactor`, `revert` (patch) and breaking
+(major) commits release from `main`; `docs`, `test`, `build`, `ci`, `chore`
+and `deps` do not. The rule set is the commit-analyzer `releaseRules` in
+[`.releaserc.json`](./.releaserc.json), identical in every chill.institute
+package repo; [`smoke.mjs`](./.github/release/smoke.mjs) fails when it drifts.
 
 Gaps:
 
