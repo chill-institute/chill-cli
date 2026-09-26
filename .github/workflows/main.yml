@@ -97,6 +97,15 @@ jobs:
         with:
           cache: false
 
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          package-manager-cache: false
+
+      - name: Install locked semantic-release
+        run: npm ci --prefix .github/release --ignore-scripts --no-audit --no-fund
+
       - name: Mint a chill-ci token
         id: app
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
@@ -109,9 +118,7 @@ jobs:
 
       - name: Tag next release
         id: semantic_release
-        uses: cycjimmy/semantic-release-action@b12c8f6015dc215fe37bc154d4ad456dd3833c90 # v6.0.0
-        with:
-          semantic_version: 25.0.9
+        run: node .github/release/release.mjs
         env:
           GITHUB_TOKEN: ${{ steps.app.outputs.token }}
 

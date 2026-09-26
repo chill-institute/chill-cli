@@ -6,3 +6,4 @@ dist/
 
 # Claude Code managed worktrees
 .claude/worktrees/
+.github/release/node_modules/

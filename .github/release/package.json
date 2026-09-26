@@ -1,0 +1,8 @@
+{
+  "name": "chill-cli-release",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "semantic-release": "25.0.9"
+  }
+}
