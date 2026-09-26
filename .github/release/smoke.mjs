@@ -17,6 +17,15 @@ const releaseRules = [
   { type: "refactor", release: "patch" },
   { type: "revert", release: "patch" },
 ];
+const presetConfig = {
+  types: [
+    { type: "feat", section: "Features" },
+    { type: "fix", section: "Bug Fixes" },
+    { type: "perf", section: "Performance Improvements" },
+    { type: "refactor", section: "Code Refactoring" },
+    { type: "revert", section: "Reverts" },
+  ],
+};
 
 const config = JSON.parse(readFileSync(".releaserc.json", "utf8"));
 const pluginName = (plugin) => (Array.isArray(plugin) ? plugin[0] : plugin);
@@ -31,7 +40,7 @@ assert.deepEqual(
 );
 assert.deepEqual(
   pluginOptions(notesGenerator),
-  { preset },
+  { preset, presetConfig },
   `${notesGenerator} options drifted from the shared release policy`,
 );
 for (const plugin of config.plugins) {
@@ -119,7 +128,21 @@ try {
   if (!patch || patch.version !== "1.0.1") {
     throw new Error(`Unexpected smoke patch: ${JSON.stringify(patch)}`);
   }
-  console.log(`release smoke ok: ${first.gitTag}, ${patch.gitTag}`);
+  git("-c", "tag.gpgSign=false", "tag", patch.gitTag);
+  git("push", "--quiet", "origin", patch.gitTag);
+
+  commit("refactor: smoke refactor");
+  const refactor = await plan();
+  if (
+    !refactor ||
+    refactor.version !== "1.0.2" ||
+    !refactor.notes.includes("smoke refactor")
+  ) {
+    throw new Error(`Unexpected smoke refactor: ${JSON.stringify(refactor)}`);
+  }
+  console.log(
+    `release smoke ok: ${first.gitTag}, ${patch.gitTag}, ${refactor.gitTag}`,
+  );
 } finally {
   rmSync(work, { recursive: true, force: true });
 }
