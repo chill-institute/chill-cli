@@ -33,6 +33,8 @@ jobs:
       sha: ${{ steps.resolve.outputs.sha }}
       version: ${{ steps.resolve.outputs.version }}
       published: ${{ steps.resolve.outputs.published }}
+      latest: ${{ steps.resolve.outputs.latest }}
+      npm_tag: ${{ steps.resolve.outputs.npm_tag }}
     steps:
       - name: Resolve tag and release state
         id: resolve
@@ -74,11 +76,31 @@ jobs:
             exit 1
           fi
 
-          printf 'Tag %s resolves to %s; published: %s\n' "$RELEASE_TAG" "$sha" "$published"
+          highest="$(
+            gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
+              --jq '.[] | select(.draft == false and .prerelease == false) | .tag_name' |
+              { grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' || true; } |
+              sort -V | tail -n 1
+          )"
+          if [[ "$RELEASE_TAG" == *-* ]]; then
+            latest=false
+            npm_tag=next
+          elif [[ -z "$highest" || "$(printf '%s\n' "$highest" "$RELEASE_TAG" | sort -V | tail -n 1)" == "$RELEASE_TAG" ]]; then
+            latest=true
+            npm_tag=latest
+          else
+            latest=false
+            npm_tag=backfill
+          fi
+
+          printf 'Tag %s resolves to %s; published: %s; highest published: %s; npm dist-tag: %s\n' \
+            "$RELEASE_TAG" "$sha" "$published" "${highest:-none}" "$npm_tag"
           {
             echo "sha=$sha"
             echo "version=${RELEASE_TAG#v}"
             echo "published=$published"
+            echo "latest=$latest"
+            echo "npm_tag=$npm_tag"
           } >>"$GITHUB_OUTPUT"
 
   build:
@@ -94,6 +116,21 @@ jobs:
       contents: read
       id-token: write
     steps:
+      - name: Refuse an already published release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          if gh api "repos/$GITHUB_REPOSITORY/releases/tags/$RELEASE_TAG" --jq '.draft' 2>"$RUNNER_TEMP/lookup.err" | grep -qx false; then
+            printf '%s is already published; re-run all jobs so resolve reconciles it without a rebuild\n' "$RELEASE_TAG" >&2
+            exit 1
+          fi
+          if [[ -s "$RUNNER_TEMP/lookup.err" ]] && ! grep -q 'HTTP 404' "$RUNNER_TEMP/lookup.err"; then
+            cat "$RUNNER_TEMP/lookup.err" >&2
+            exit 1
+          fi
+
       - name: Check out release commit
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -170,12 +207,13 @@ jobs:
         if: ${{ !inputs.dry_run }}
         env:
           GH_TOKEN: ${{ steps.app.outputs.token }}
+          RELEASE_LATEST: ${{ needs.resolve.outputs.latest }}
           RELEASE_SHA: ${{ needs.resolve.outputs.sha }}
           RELEASE_TAG: ${{ inputs.tag }}
         run: |
           set -euo pipefail
           test "$(gh api "repos/$GITHUB_REPOSITORY/commits/$RELEASE_TAG" --jq '.sha')" = "$RELEASE_SHA"
-          gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --draft=false
+          gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --draft=false --latest="$RELEASE_LATEST"
           for attempt in {1..12}; do
             if gh release verify "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY"; then
               exit 0
@@ -205,14 +243,16 @@ jobs:
       id-token: write
     env:
       DRY_RUN: ${{ inputs.dry_run }}
+      NPM_DIST_TAG: ${{ needs.resolve.outputs.npm_tag }}
+      RELEASE_LATEST: ${{ needs.resolve.outputs.latest }}
       RELEASE_TAG: ${{ inputs.tag }}
       RELEASE_VERSION: ${{ needs.resolve.outputs.version }}
     steps:
-      - name: Check out release commit
+      - name: Check out release tooling
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ needs.resolve.outputs.sha }}
+          ref: ${{ github.workflow_sha }}
 
       - name: Download published release assets
         env:
@@ -267,12 +307,12 @@ jobs:
             fi
 
             if [[ "$DRY_RUN" == true ]]; then
-              printf 'dry run: would publish %s@%s\n' "$package_name" "$package_version"
+              printf 'dry run: would publish %s@%s with dist-tag %s\n' "$package_name" "$package_version" "$NPM_DIST_TAG"
               return 0
             fi
 
             for attempt in 1 2 3; do
-              if npm publish --provenance --access public "$package_dir"; then
+              if npm publish --provenance --access public --tag "$NPM_DIST_TAG" "$package_dir"; then
                 return 0
               fi
 
@@ -296,7 +336,7 @@ jobs:
 
       - name: Mint a homebrew-tap token
         id: tap_app
-        if: ${{ !inputs.dry_run }}
+        if: ${{ !inputs.dry_run && needs.resolve.outputs.latest == 'true' }}
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
           client-id: ${{ vars.CHILL_CI_APP_CLIENT_ID }}
@@ -306,6 +346,7 @@ jobs:
           permission-contents: write
 
       - name: Update Homebrew formula
+        if: ${{ needs.resolve.outputs.latest == 'true' }}
         env:
           GH_TOKEN: ${{ steps.tap_app.outputs.token || github.token }}
           TAP_FILE: repos/chill-institute/homebrew-tap/contents/Formula/chilly.rb
@@ -317,7 +358,9 @@ jobs:
           current="$(gh api "$TAP_FILE?ref=main")"
           jq -r '.content' <<<"$current" | base64 --decode >"$RUNNER_TEMP/current.rb"
           if cmp -s "$formula" "$RUNNER_TEMP/current.rb"; then
-            printf 'Homebrew formula already matches %s\n' "$RELEASE_TAG"
+            last="$(gh api "repos/chill-institute/homebrew-tap/commits?path=Formula/chilly.rb&sha=main&per_page=1" --jq '.[0] | "\(.sha) \(.commit.verification.verified)"')"
+            printf 'Homebrew formula already matches %s; last formula commit and verification: %s\n' "$RELEASE_TAG" "$last"
+            test "${last##* }" = true
             exit 0
           fi
           diff -u "$RUNNER_TEMP/current.rb" "$formula" || true
@@ -344,3 +387,36 @@ jobs:
           curl --fail --silent --show-error --retry 5 --retry-all-errors --retry-delay 10 \
             "https://proxy.golang.org/github.com/chill-institute/chill-cli/v2/@v/$RELEASE_TAG.info" |
             jq -e --arg tag "$RELEASE_TAG" '.Version == $tag'
+
+  audit:
+    needs: [resolve, downstream]
+    if: ${{ !cancelled() && needs.resolve.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Fail on release tags without a published release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+          UNRELEASED_TAG_ALLOWLIST: v0.2.2
+        run: |
+          set -euo pipefail
+          gh api --paginate "repos/$GITHUB_REPOSITORY/tags?per_page=100" --jq '.[].name' |
+            { grep -E '^v[0-9]+\.[0-9]+\.[0-9]+' || true; } | sort -u >"$RUNNER_TEMP/tags"
+          gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" --jq '.[] | select(.draft == false) | .tag_name' |
+            sort -u >"$RUNNER_TEMP/published"
+          tr ' ' '\n' <<<"$UNRELEASED_TAG_ALLOWLIST" | sort -u >"$RUNNER_TEMP/allowed"
+          missing=()
+          while IFS= read -r tag; do
+            if [[ "$(printf '%s\n' "$tag" "$RELEASE_TAG" | sort -V | tail -n 1)" == "$RELEASE_TAG" ]]; then
+              missing+=("$tag")
+            fi
+          done < <(comm -23 "$RUNNER_TEMP/tags" "$RUNNER_TEMP/published" | comm -23 - "$RUNNER_TEMP/allowed")
+          if (( ${#missing[@]} > 0 )); then
+            printf 'Release tags up to %s without a published release: %s\n' "$RELEASE_TAG" "${missing[*]}" >&2
+            printf 'Recover each by dispatching Main with its tag.\n' >&2
+            exit 1
+          fi
+          printf 'Every release tag up to %s has a published release\n' "$RELEASE_TAG"
