@@ -42,5 +42,6 @@ mise run test:integration
 - Explain compatibility or migration risk in the pull request.
 
 Merges to `main` are released from Conventional Commits. Automation creates the
-tag, immutable GitHub release, Homebrew formula, and npm packages. The manual
-`Release` workflow recovers an existing release tag.
+tag, immutable GitHub release, Homebrew formula, and npm packages. To recover
+an existing tag, dispatch `Main` with its `tag`; keep `dry_run` on to preview
+the repair.

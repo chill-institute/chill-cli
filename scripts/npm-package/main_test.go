@@ -1,11 +1,19 @@
 package main
 
 import (
+	"archive/tar"
+	"archive/zip"
+	"bytes"
+	"compress/gzip"
+	"crypto/sha256"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/chill-institute/chill-cli/v2/internal/releaseassets"
 )
 
 func TestRunCreatesRootAndPlatformPackages(t *testing.T) {
@@ -16,24 +24,7 @@ func TestRunCreatesRootAndPlatformPackages(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	artifacts := make([]artifact, 0, len(targets))
-	for _, target := range targets {
-		binaryPath := filepath.Join(distDir, "build", target.suffix, target.binaryFile)
-		if err := os.MkdirAll(filepath.Dir(binaryPath), 0o755); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(binaryPath, []byte("binary"), 0o755); err != nil {
-			t.Fatal(err)
-		}
-		artifacts = append(artifacts, artifact{
-			Name:   target.binaryFile,
-			Path:   binaryPath,
-			GoOS:   target.goOS,
-			GoArch: target.goArch,
-			Type:   "Binary",
-		})
-	}
-	writeJSONFixture(t, filepath.Join(distDir, "artifacts.json"), artifacts)
+	writeReleaseFixture(t, distDir, "1.2.3")
 
 	if err := run(options{distDir: distDir, outDir: outDir, version: "v1.2.3"}); err != nil {
 		t.Fatalf("run() error = %v", err)
@@ -74,6 +65,9 @@ func TestRunCreatesRootAndPlatformPackages(t *testing.T) {
 		t.Fatalf("platform cpu = %#v, want arm64", platform.CPU)
 	}
 	assertExecutable(t, filepath.Join(outDir, "cli-darwin-arm64", "bin", "chilly"))
+	if data, err := os.ReadFile(filepath.Join(outDir, "cli-win32-x64", "bin", "chilly.exe")); err != nil || string(data) != "chilly.exe" {
+		t.Fatalf("windows binary = %q, %v; want archive entry", data, err)
+	}
 }
 
 func TestRunUsesMetadataVersionWhenVersionFlagIsEmpty(t *testing.T) {
@@ -84,23 +78,7 @@ func TestRunUsesMetadataVersionWhenVersionFlagIsEmpty(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	artifacts := make([]artifact, 0, len(targets))
-	for _, target := range targets {
-		binaryPath := filepath.Join(distDir, target.suffix, target.binaryFile)
-		if err := os.MkdirAll(filepath.Dir(binaryPath), 0o755); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(binaryPath, []byte("binary"), 0o755); err != nil {
-			t.Fatal(err)
-		}
-		artifacts = append(artifacts, artifact{
-			Path:   binaryPath,
-			GoOS:   target.goOS,
-			GoArch: target.goArch,
-			Type:   "Binary",
-		})
-	}
-	writeJSONFixture(t, filepath.Join(distDir, "artifacts.json"), artifacts)
+	writeReleaseFixture(t, distDir, "2.3.4")
 	writeJSONFixture(t, filepath.Join(distDir, "metadata.json"), metadata{Version: "v2.3.4"})
 
 	if err := run(options{distDir: distDir, outDir: outDir}); err != nil {
@@ -122,20 +100,38 @@ func TestRunRejectsMissingOptions(t *testing.T) {
 	}
 }
 
-func TestRunRejectsMissingBinaryArtifact(t *testing.T) {
+func TestRunRejectsTamperedArchive(t *testing.T) {
 	dir := t.TempDir()
 	distDir := filepath.Join(dir, "dist")
-	outDir := filepath.Join(dir, "npm")
-	if err := os.MkdirAll(distDir, 0o755); err != nil {
+	writeReleaseFixture(t, distDir, "1.0.0")
+	if err := os.WriteFile(filepath.Join(distDir, "chilly_1.0.0_linux_arm64.tar.gz"), []byte("tampered"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	writeJSONFixture(t, filepath.Join(distDir, "artifacts.json"), []artifact{
-		{Path: filepath.Join(distDir, "chilly"), GoOS: "darwin", GoArch: "arm64", Type: "Binary"},
-	})
 
-	err := run(options{distDir: distDir, outDir: outDir, version: "1.0.0"})
-	if err == nil || !strings.Contains(err.Error(), "missing GoReleaser binary artifact") {
-		t.Fatalf("run() error = %v, want missing binary artifact error", err)
+	err := run(options{distDir: distDir, outDir: filepath.Join(dir, "npm"), version: "1.0.0"})
+	if err == nil || !strings.Contains(err.Error(), "does not match") {
+		t.Fatalf("run() error = %v, want digest mismatch", err)
+	}
+}
+
+func TestRunRejectsArchiveWithoutBinary(t *testing.T) {
+	dir := t.TempDir()
+	distDir := filepath.Join(dir, "dist")
+	writeReleaseFixture(t, distDir, "1.0.0")
+	name := "chilly_1.0.0_windows_arm64.zip"
+	writeZip(t, filepath.Join(distDir, name), "README.md")
+	rewriteChecksums(t, distDir)
+
+	err := run(options{distDir: distDir, outDir: filepath.Join(dir, "npm"), version: "1.0.0"})
+	if err == nil || !strings.Contains(err.Error(), "archive has no chilly.exe") {
+		t.Fatalf("run() error = %v, want missing binary error", err)
+	}
+}
+
+func TestRunRejectsInvalidVersion(t *testing.T) {
+	err := run(options{distDir: t.TempDir(), outDir: t.TempDir(), version: "latest"})
+	if err == nil || !strings.Contains(err.Error(), "invalid release version") {
+		t.Fatalf("run() error = %v, want invalid version error", err)
 	}
 }
 
@@ -146,30 +142,6 @@ func TestResolveVersionRejectsMissingMetadataVersion(t *testing.T) {
 	_, err := resolveVersion(options{distDir: dir})
 	if err == nil || !strings.Contains(err.Error(), "metadata version is empty") {
 		t.Fatalf("resolveVersion() error = %v, want empty metadata version error", err)
-	}
-}
-
-func TestReadArtifactsRejectsInvalidJSON(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "artifacts.json")
-	if err := os.WriteFile(path, []byte("{"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	_, err := readArtifacts(path)
-	if err == nil || !strings.Contains(err.Error(), "parse artifacts") {
-		t.Fatalf("readArtifacts() error = %v, want parse error", err)
-	}
-}
-
-func TestBinaryArtifactsFiltersNonBinaryEntries(t *testing.T) {
-	binaries := binaryArtifacts([]artifact{
-		{Path: "archive.tar.gz", GoOS: "darwin", GoArch: "arm64", Type: "Archive"},
-		{Path: "chilly", GoOS: "darwin", GoArch: "arm64", Type: "Binary"},
-		{Path: "", GoOS: "linux", GoArch: "arm64", Type: "Binary"},
-	})
-
-	if len(binaries) != 1 || binaries["darwin/arm64"] != "chilly" {
-		t.Fatalf("binaryArtifacts() = %#v, want one darwin/arm64 binary", binaries)
 	}
 }
 
@@ -186,10 +158,85 @@ func TestWriteJSONRejectsUnmarshalableValue(t *testing.T) {
 	}
 }
 
-func TestCopyFileRejectsMissingSource(t *testing.T) {
-	err := copyFile(filepath.Join(t.TempDir(), "missing"), filepath.Join(t.TempDir(), "out"), 0o755)
-	if err == nil {
-		t.Fatal("copyFile() error = nil, want missing source error")
+func writeReleaseFixture(t *testing.T, distDir string, version string) {
+	t.Helper()
+	if err := os.MkdirAll(distDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, target := range targets {
+		path := filepath.Join(distDir, releaseassets.ArchiveName(version, target.goOS, target.goArch))
+		if target.goOS == "windows" {
+			writeZip(t, path, target.binaryFile)
+		} else {
+			writeTarGz(t, path, target.binaryFile)
+		}
+	}
+	rewriteChecksums(t, distDir)
+}
+
+func writeTarGz(t *testing.T, path string, binary string) {
+	t.Helper()
+	var buf bytes.Buffer
+	gz := gzip.NewWriter(&buf)
+	tw := tar.NewWriter(gz)
+	for _, name := range []string{"README.md", binary} {
+		body := []byte(name)
+		if err := tw.WriteHeader(&tar.Header{Name: name, Mode: 0o755, Size: int64(len(body)), Typeflag: tar.TypeReg}); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := tw.Write(body); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := tw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := gz.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, buf.Bytes(), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func writeZip(t *testing.T, path string, entry string) {
+	t.Helper()
+	var buf bytes.Buffer
+	zw := zip.NewWriter(&buf)
+	w, err := zw.Create(entry)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := w.Write([]byte(entry)); err != nil {
+		t.Fatal(err)
+	}
+	if err := zw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, buf.Bytes(), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func rewriteChecksums(t *testing.T, distDir string) {
+	t.Helper()
+	entries, err := os.ReadDir(distDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var manifest strings.Builder
+	for _, entry := range entries {
+		if !strings.HasPrefix(entry.Name(), "chilly_") {
+			continue
+		}
+		data, err := os.ReadFile(filepath.Join(distDir, entry.Name()))
+		if err != nil {
+			t.Fatal(err)
+		}
+		fmt.Fprintf(&manifest, "%x  %s\n", sha256.Sum256(data), entry.Name())
+	}
+	if err := os.WriteFile(filepath.Join(distDir, releaseassets.ChecksumsFile), []byte(manifest.String()), 0o644); err != nil {
+		t.Fatal(err)
 	}
 }
 

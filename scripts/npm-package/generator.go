@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+
+	"github.com/chill-institute/chill-cli/v2/internal/releaseassets"
 )
 
 func run(cfg options) error {
@@ -20,12 +22,19 @@ func run(cfg options) error {
 		return err
 	}
 
-	artifacts, err := readArtifacts(filepath.Join(cfg.distDir, "artifacts.json"))
+	sums, err := releaseassets.ReadChecksums(filepath.Join(cfg.distDir, releaseassets.ChecksumsFile))
 	if err != nil {
 		return err
 	}
+	archives := map[string]string{}
+	for _, t := range targets {
+		path, err := archivePath(cfg.distDir, sums, version, t)
+		if err != nil {
+			return err
+		}
+		archives[t.suffix] = path
+	}
 
-	binaries := binaryArtifacts(artifacts)
 	if err := resetOutputDir(cfg.outDir); err != nil {
 		return err
 	}
@@ -34,11 +43,7 @@ func run(cfg options) error {
 		return err
 	}
 	for _, t := range targets {
-		source, ok := binaries[t.goOS+"/"+t.goArch]
-		if !ok {
-			return fmt.Errorf("missing GoReleaser binary artifact for %s/%s", t.goOS, t.goArch)
-		}
-		if err := writePlatformPackage(cfg.outDir, version, t, source); err != nil {
+		if err := writePlatformPackage(cfg.outDir, version, t, archives[t.suffix]); err != nil {
 			return err
 		}
 	}
@@ -64,7 +69,7 @@ func writeRootPackage(outDir string, version string) error {
 	return nil
 }
 
-func writePlatformPackage(outDir string, version string, t target, source string) error {
+func writePlatformPackage(outDir string, version string, t target, archive string) error {
 	packageDir := filepath.Join(outDir, platformDirName(t))
 	binDir := filepath.Join(packageDir, "bin")
 	if err := os.MkdirAll(binDir, 0o755); err != nil {
@@ -77,8 +82,8 @@ func writePlatformPackage(outDir string, version string, t target, source string
 	if err := os.WriteFile(filepath.Join(packageDir, "README.md"), []byte(platformReadme(t)), 0o644); err != nil {
 		return fmt.Errorf("write platform README: %w", err)
 	}
-	if err := copyFile(source, filepath.Join(binDir, t.binaryFile), 0o755); err != nil {
-		return fmt.Errorf("copy platform binary %s: %w", t.suffix, err)
+	if err := extractBinary(archive, t.binaryFile, filepath.Join(binDir, t.binaryFile)); err != nil {
+		return fmt.Errorf("extract platform binary %s: %w", t.suffix, err)
 	}
 	return nil
 }

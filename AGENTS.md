@@ -21,7 +21,8 @@ The pre-push hook runs `mise run verify`.
 | Schema metadata | `mise run contracts:check` against `../chill-contracts` | local, [PR](./.github/workflows/verify.yml), [main](./.github/workflows/main.yml) `verify` at a pinned tag | exit status |
 | Workflows | `mise run actions` (actionlint, zizmor; inside verify) | local, CI with verify | exit status |
 | Hosted API behavior | `mise run test:integration`; scope in [Hosted Integration](./CONTRIBUTING.md#hosted-integration) | local only, `CHILLY_TEST_API_URL` and `CHILLY_TEST_TOKEN` | exit status |
-| Release and packaging | push to `main`; recover with the [Release](./.github/workflows/release.yml) workflow | [main](./.github/workflows/main.yml) `release`, `publish` | tag, immutable GitHub release with 7 assets and provenance, Homebrew formula, npm packages |
+| GoReleaser config | `goreleaser release --snapshot --clean` twice; `dist/checksums.txt` must match | local | `dist/` |
+| Release and packaging | push to `main`; recover by dispatching [Main](./.github/workflows/main.yml) with `tag` (`dry_run` defaults on) | [main](./.github/workflows/main.yml) `release`, `publish` | tag, immutable GitHub release with 7 assets and provenance, npm packages and a signed Homebrew formula commit built from the published assets |
 
 Each commit type listed in [`.releaserc.json`](./.releaserc.json),
 including `docs`, publishes a release from `main`.
@@ -30,6 +31,8 @@ Gaps:
 
 - No lane runs the packaged binary from GoReleaser, npm, or Homebrew; smoke
   uses `go run`. Owner: chill-institute/chill-cli.
+- The release workflow's shell steps have no CI harness; only a real release
+  or a `dry_run` dispatch exercises them. Owner: chill-institute/chill-cli.
 - `mise run smoke` does not run in CI. Owner: chill-institute/chill-cli.
 - Hosted integration has no CI runner or declared test account. Owner:
   operator.
@@ -54,6 +57,8 @@ Gaps:
 - Local profiles and credentials: `pkg/config/`
 - API transport and error mapping: `pkg/rpc/`
 - Release lookup and binary replacement: `internal/update/`
+- Release asset checksums and names: `internal/releaseassets/`; npm and
+  Homebrew packaging from those assets: `scripts/`
 - Shared tasks and hook behavior: `mise.toml`
 
 [Architecture](./docs/ARCHITECTURE.md) · [Contributing](./CONTRIBUTING.md) ·

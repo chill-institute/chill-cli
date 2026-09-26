@@ -15,17 +15,38 @@ builds:
     goarch:
       - amd64
       - arm64
+    flags:
+      - -trimpath
+    mod_timestamp: "{{ .CommitTimestamp }}"
     ldflags:
       - -s -w
       - -X github.com/chill-institute/chill-cli/v2/internal/buildinfo.version={{ .Version }}
       - -X github.com/chill-institute/chill-cli/v2/internal/buildinfo.commit={{ .Commit }}
-      - -X github.com/chill-institute/chill-cli/v2/internal/buildinfo.date={{ .Date }}
+      - -X github.com/chill-institute/chill-cli/v2/internal/buildinfo.date={{ .CommitDate }}
 
 archives:
   - id: chilly
     ids:
       - chilly
     name_template: "{{ .Binary }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    builds_info:
+      owner: root
+      group: root
+      mode: 0755
+      mtime: "{{ .CommitDate }}"
+    files:
+      - src: LICENSE*
+        info:
+          owner: root
+          group: root
+          mode: 0644
+          mtime: "{{ .CommitDate }}"
+      - src: README*
+        info:
+          owner: root
+          group: root
+          mode: 0644
+          mtime: "{{ .CommitDate }}"
     formats:
       - tar.gz
     format_overrides:
@@ -35,27 +56,6 @@ archives:
 
 checksum:
   name_template: checksums.txt
-
-brews:
-  - name: chilly
-    ids:
-      - chilly
-    skip_upload: "{{ if eq (index .Env \"TAP_GITHUB_TOKEN\") \"\" }}true{{ else }}false{{ end }}"
-    repository:
-      owner: chill-institute
-      name: homebrew-tap
-      token: "{{ .Env.TAP_GITHUB_TOKEN }}"
-    directory: Formula
-    commit_author:
-      name: chill-ci[bot]
-      email: 323150493+chill-ci[bot]@users.noreply.github.com
-    homepage: https://chill.institute
-    description: Search chill.institute and send transfers from the terminal
-    license: MIT
-    install: |
-      bin.install "chilly"
-    test: |
-      system bin/"chilly", "version", "--output", "json"
 
 release:
   github:

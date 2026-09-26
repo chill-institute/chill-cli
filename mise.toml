@@ -133,7 +133,7 @@ printf '{"url":"magnet:?xt=urn:btih:test"}' | go run ./cmd/chilly --config "$con
 """
 
 [tasks."npm:prepare"]
-description = "Prepare npm package directories from GoReleaser dist artifacts"
+description = "Prepare npm package directories from the release archives in dist"
 run = "go run ./scripts/npm-package --version \"${CHILLY_NPM_VERSION:-}\""
 
 [tasks."npm:pack"]

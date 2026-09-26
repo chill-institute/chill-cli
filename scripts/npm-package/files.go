@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 )
@@ -32,25 +31,4 @@ func writeJSON(path string, value any) error {
 		return fmt.Errorf("write %s: %w", path, err)
 	}
 	return nil
-}
-
-func copyFile(source string, destination string, mode os.FileMode) error {
-	in, err := os.Open(source)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		_ = in.Close()
-	}()
-
-	out, err := os.OpenFile(destination, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, mode)
-	if err != nil {
-		return err
-	}
-	_, copyErr := io.Copy(out, in)
-	closeErr := out.Close()
-	if copyErr != nil {
-		return copyErr
-	}
-	return closeErr
 }

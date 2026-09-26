@@ -4,6 +4,17 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag to reconcile (vX.Y.Z)
+        required: true
+        type: string
+      dry_run:
+        description: Report repairs without changing the release, npm, or the tap
+        required: false
+        type: boolean
+        default: true
 
 permissions: {}
 
@@ -12,7 +23,7 @@ jobs:
     concurrency:
       group: main-verify-${{ github.ref }}
       cancel-in-progress: true
-    if: ${{ !contains(github.event.head_commit.message, '[skip ci]') }}
+    if: ${{ github.event_name == 'push' && !contains(github.event.head_commit.message, '[skip ci]') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:
@@ -57,6 +68,9 @@ jobs:
   release:
     needs: [verify]
     if: ${{ needs.verify.result == 'success' }}
+    concurrency:
+      group: cli-release-tag
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     timeout-minutes: 10
     environment:
@@ -92,6 +106,8 @@ jobs:
       - name: Tag next release
         id: semantic_release
         uses: cycjimmy/semantic-release-action@b12c8f6015dc215fe37bc154d4ad456dd3833c90 # v6.0.0
+        with:
+          semantic_version: 25.0.9
         env:
           GITHUB_TOKEN: ${{ steps.app.outputs.token }}
 
@@ -146,7 +162,7 @@ jobs:
 
   publish:
     needs: [release]
-    if: ${{ needs.release.outputs.tag != '' }}
+    if: ${{ !cancelled() && (github.event_name == 'workflow_dispatch' || needs.release.outputs.tag != '') }}
     concurrency:
       group: cli-release-main
       cancel-in-progress: false
@@ -157,7 +173,8 @@ jobs:
     # Await actionlint support: https://github.com/rhysd/actionlint/issues/711
     uses: ./.github/workflows/_release.yml # zizmor: ignore[self-repository]
     with:
-      tag: ${{ needs.release.outputs.tag }}
-      ref: ${{ needs.release.outputs.tag }}
+      tag: ${{ inputs.tag || needs.release.outputs.tag }}
+      verify: ${{ github.event_name == 'workflow_dispatch' }}
+      dry_run: ${{ inputs.dry_run == true }}
     secrets:
       CHILL_CI_APP_PRIVATE_KEY: ${{ secrets.CHILL_CI_APP_PRIVATE_KEY }}
