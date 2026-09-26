@@ -1,0 +1,44 @@
+name: Bug report
+description: Report a problem with the CLI
+title: "[bug] "
+labels: [bug]
+body:
+  - type: textarea
+    id: command
+    attributes:
+      label: Command
+      description: The exact command you ran.
+      render: bash
+      placeholder: chilly ...
+    validations:
+      required: true
+  - type: textarea
+    id: result
+    attributes:
+      label: Result
+      description: What happened, and what should have happened instead? Include sanitized JSON output or reproduction steps; never include tokens.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Output of `chilly version --output json`.
+    validations:
+      required: true
+  - type: dropdown
+    id: install
+    attributes:
+      label: Install method
+      options:
+        - npm
+        - Homebrew
+        - install.sh
+        - source
+    validations:
+      required: true
+  - type: input
+    id: platform
+    attributes:
+      label: OS and architecture
+      placeholder: macOS arm64

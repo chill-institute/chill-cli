@@ -1,0 +1,17 @@
+name: Feature request
+description: Propose a new CLI capability or improvement
+title: "[feature] "
+labels: [enhancement]
+body:
+  - type: textarea
+    id: workflow
+    attributes:
+      label: Workflow
+      description: What should become possible, and for whom?
+    validations:
+      required: true
+  - type: textarea
+    id: contract
+    attributes:
+      label: Command contract
+      description: Suggest a command, flags, JSON shape, or safety boundary if useful.

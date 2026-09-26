@@ -3,3 +3,6 @@ contact_links:
   - name: Usage and architecture docs
     url: https://github.com/chill-institute/chill-cli/tree/main/docs
     about: Check the CLI docs before opening a new issue.
+  - name: Report a vulnerability
+    url: https://github.com/chill-institute/chill-cli/security/policy
+    about: Report security problems privately, never in a public issue.
