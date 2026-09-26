@@ -55,6 +55,18 @@ jobs:
           CHILLY_CONTRACTS_PROTO: ${{ github.workspace }}/.contracts/chill-contracts/proto/chill/v4/api.proto
         run: mise run contracts:check
 
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          package-manager-cache: false
+
+      - name: Install locked semantic-release
+        run: npm ci --prefix .github/release --ignore-scripts --no-audit --no-fund
+
+      - name: Smoke-test semantic-release
+        run: node .github/release/smoke.mjs
+
       - name: Scan pushed range
         if: ${{ !cancelled() }}
         uses: chill-institute/.github/.github/actions/scan@04bad7d160da50b0509abfd5ff2e382aaf7d1aef # v1.0.0
