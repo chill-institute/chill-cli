@@ -19,35 +19,15 @@ import (
 	"testing"
 )
 
-func TestArchiveName(t *testing.T) {
+func TestFindAssetRejectsUnsupportedTarget(t *testing.T) {
 	t.Parallel()
 
-	got, err := ArchiveName("1.2.3", "darwin", "arm64")
-	if err != nil {
-		t.Fatalf("ArchiveName() error = %v", err)
+	release := Release{
+		TagName: "v1.2.3",
+		Assets:  []ReleaseAsset{{Name: "chilly_1.2.3_plan9_amd64.tar.gz"}},
 	}
-	if got != "chilly_1.2.3_darwin_arm64.tar.gz" {
-		t.Fatalf("ArchiveName() = %q", got)
-	}
-}
-
-func TestArchiveNameWindows(t *testing.T) {
-	t.Parallel()
-
-	got, err := ArchiveName("1.2.3", "windows", "amd64")
-	if err != nil {
-		t.Fatalf("ArchiveName() error = %v", err)
-	}
-	if got != "chilly_1.2.3_windows_amd64.zip" {
-		t.Fatalf("ArchiveName() = %q", got)
-	}
-}
-
-func TestArchiveNameRejectsUnsupportedTarget(t *testing.T) {
-	t.Parallel()
-
-	if _, err := ArchiveName("1.2.3", "plan9", "amd64"); err == nil {
-		t.Fatal("ArchiveName() error = nil, want unsupported os")
+	if _, err := FindAsset(release, "plan9", "amd64"); err == nil {
+		t.Fatal("FindAsset() error = nil, want unsupported os")
 	}
 }
 

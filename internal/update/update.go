@@ -18,6 +18,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/chill-institute/chill-cli/v2/internal/releaseassets"
 )
 
 const (
@@ -146,34 +148,24 @@ func SameVersion(left string, right string) bool {
 	return normalizedLeft != "" && normalizedLeft == normalizedRight
 }
 
-func ArchiveName(version string, goos string, goarch string) (string, error) {
-	normalizedVersion, err := ValidateVersion(version)
+func FindAsset(release Release, goos string, goarch string) (ReleaseAsset, error) {
+	normalizedVersion, err := ValidateVersion(release.TagName)
 	if err != nil {
-		return "", err
+		return ReleaseAsset{}, err
 	}
-	assetVersion := strings.TrimPrefix(normalizedVersion, "v")
 
 	trimmedOS := strings.TrimSpace(goos)
 	trimmedArch := strings.TrimSpace(goarch)
 	if trimmedOS == "" || trimmedArch == "" {
-		return "", errors.New("target os and arch are required")
+		return ReleaseAsset{}, errors.New("target os and arch are required")
 	}
 
 	switch trimmedOS {
-	case "darwin", "linux":
-		return fmt.Sprintf("%s_%s_%s_%s.tar.gz", binaryName, assetVersion, trimmedOS, trimmedArch), nil
-	case "windows":
-		return fmt.Sprintf("%s_%s_%s_%s.zip", binaryName, assetVersion, trimmedOS, trimmedArch), nil
+	case "darwin", "linux", "windows":
 	default:
-		return "", fmt.Errorf("unsupported target os %q", goos)
+		return ReleaseAsset{}, fmt.Errorf("unsupported target os %q", goos)
 	}
-}
-
-func FindAsset(release Release, goos string, goarch string) (ReleaseAsset, error) {
-	expectedName, err := ArchiveName(release.TagName, goos, goarch)
-	if err != nil {
-		return ReleaseAsset{}, err
-	}
+	expectedName := releaseassets.ArchiveName(strings.TrimPrefix(normalizedVersion, "v"), trimmedOS, trimmedArch)
 
 	for _, asset := range release.Assets {
 		if asset.Name == expectedName {
