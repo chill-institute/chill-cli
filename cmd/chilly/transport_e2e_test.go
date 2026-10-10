@@ -3,12 +3,9 @@ package main
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"net/http"
 	"net/http/httptest"
-	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 )
@@ -22,8 +19,6 @@ type cliErrorEnvelope struct {
 }
 
 func TestCLITransportHardeningEndToEnd(t *testing.T) {
-	binary := buildCLIBinary(t)
-
 	t.Run("rejects cross-origin authenticated redirect", func(t *testing.T) {
 		redirected := make(chan struct{}, 1)
 		destination := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
@@ -41,8 +36,8 @@ func TestCLITransportHardeningEndToEnd(t *testing.T) {
 		defer source.Close()
 
 		configPath := filepath.Join(t.TempDir(), "config.json")
-		configureCLIAuth(t, binary, configPath, source.URL)
-		stdout, stderr, exitCode := runCLIBinary(t, binary,
+		configureCLIAuth(t, configPath, source.URL)
+		stdout, stderr, exitCode := runCLI(
 			"--config", configPath,
 			"--api-url", source.URL,
 			"--output", "json",
@@ -80,8 +75,8 @@ func TestCLITransportHardeningEndToEnd(t *testing.T) {
 		defer server.Close()
 
 		configPath := filepath.Join(t.TempDir(), "config.json")
-		configureCLIAuth(t, binary, configPath, server.URL)
-		stdout, stderr, exitCode := runCLIBinary(t, binary,
+		configureCLIAuth(t, configPath, server.URL)
+		stdout, stderr, exitCode := runCLI(
 			"--config", configPath,
 			"--api-url", server.URL,
 			"--output", "json",
@@ -114,8 +109,8 @@ func TestCLITransportHardeningEndToEnd(t *testing.T) {
 		defer server.Close()
 
 		configPath := filepath.Join(t.TempDir(), "config.json")
-		configureCLIAuth(t, binary, configPath, server.URL)
-		stdout, stderr, exitCode := runCLIBinary(t, binary,
+		configureCLIAuth(t, configPath, server.URL)
+		stdout, stderr, exitCode := runCLI(
 			"--config", configPath,
 			"--api-url", server.URL,
 			"--output", "json",
@@ -137,23 +132,9 @@ func TestCLITransportHardeningEndToEnd(t *testing.T) {
 	})
 }
 
-func buildCLIBinary(t *testing.T) string {
+func configureCLIAuth(t *testing.T, configPath string, apiURL string) {
 	t.Helper()
-	binaryName := "chilly"
-	if runtime.GOOS == "windows" {
-		binaryName += ".exe"
-	}
-	binary := filepath.Join(t.TempDir(), binaryName)
-	command := exec.Command("go", "build", "-o", binary, ".")
-	if output, err := command.CombinedOutput(); err != nil {
-		t.Fatalf("build CLI: %v\n%s", err, output)
-	}
-	return binary
-}
-
-func configureCLIAuth(t *testing.T, binary string, configPath string, apiURL string) {
-	t.Helper()
-	stdout, stderr, exitCode := runCLIBinary(t, binary,
+	stdout, stderr, exitCode := runCLI(
 		"--config", configPath,
 		"--api-url", apiURL,
 		"--output", "json",
@@ -166,22 +147,11 @@ func configureCLIAuth(t *testing.T, binary string, configPath string, apiURL str
 	}
 }
 
-func runCLIBinary(t *testing.T, binary string, args ...string) (string, string, int) {
-	t.Helper()
-	command := exec.Command(binary, args...)
+func runCLI(args ...string) (string, string, int) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
-	command.Stdout = &stdout
-	command.Stderr = &stderr
-	err := command.Run()
-	if err == nil {
-		return stdout.String(), stderr.String(), 0
-	}
-	var exitError *exec.ExitError
-	if !errors.As(err, &exitError) {
-		t.Fatalf("run CLI: %v", err)
-	}
-	return stdout.String(), stderr.String(), exitError.ExitCode()
+	exitCode := run(args, strings.NewReader(""), &stdout, &stderr)
+	return stdout.String(), stderr.String(), exitCode
 }
 
 func decodeCLIError(t *testing.T, stderr string) cliErrorEnvelope {
