@@ -13,11 +13,14 @@ func TestUserSettingsPatchNormalizesAliasesAndValues(t *testing.T) {
 	}{
 		{"filter-nasty-results", "true", "search.filterNastyResults", true},
 		{"search.sort-by", "Uploaded-At", "search.sortBy", "SORT_BY_UPLOADED_AT"},
+		{"sort-by", "title", "search.sortBy", "SORT_BY_TITLE"},
 		{"tv-shows-source", "paramount plus", "catalog.tvShowsSource", "TV_SHOWS_SOURCE_PARAMOUNT_PLUS"},
 		{"movies-source", "IMDb Top 250", "catalog.moviesSource", "MOVIES_SOURCE_IMDB_TOP_250"},
 		{"catalog.sort", "release-date-desc", "catalog.sort", "CATALOG_SORT_RELEASE_DATE_DESC"},
+		{"catalog-sort", "Release-Date-Desc", "catalog.sort", "CATALOG_SORT_RELEASE_DATE_DESC"},
 		{"download.folder-id", "42", "download.folderId", "42"},
 		{"download.folderId", "null", "download.folderId", nil},
+		{"download.folderId", "None", "download.folderId", nil},
 	}
 	for _, tc := range cases {
 		patch, err := NormalizeUserSettingsPatch(tc.field, tc.value)
@@ -28,7 +31,7 @@ func TestUserSettingsPatchNormalizesAliasesAndValues(t *testing.T) {
 			t.Fatalf("%s: patch = %#v", tc.field, patch)
 		}
 	}
-	for _, tc := range [][3]string{{"nope", "1", "unsupported_user_settings_field"}, {"catalog.sort", "unspecified", "invalid_user_settings_value"}, {"filter-nasty-results", "maybe", "invalid_user_settings_value"}, {"download.folder-id", "-1", "invalid_user_settings_value"}, {"movies-source", "letterboxd", "invalid_user_settings_value"}} {
+	for _, tc := range [][3]string{{"nope", "1", "unsupported_user_settings_field"}, {"catalog.sort", "unspecified", "invalid_user_settings_value"}, {"filter-nasty-results", "maybe", "invalid_user_settings_value"}, {"download.folder-id", "-1", "invalid_user_settings_value"}, {"download.folder-id", "", "invalid_user_settings_value"}, {"download.folder-id", "nope", "invalid_user_settings_value"}, {"movies-source", "letterboxd", "invalid_user_settings_value"}} {
 		_, err := NormalizeUserSettingsPatch(tc[0], tc[1])
 		var validation *ValidationError
 		if !errors.As(err, &validation) || validation.Code != tc[2] {
@@ -40,8 +43,14 @@ func TestUserSettingsPatchNormalizesAliasesAndValues(t *testing.T) {
 	if UserSettingsFields()[0].Aliases[0] == "tampered" {
 		t.Fatal("UserSettingsFields exposes the shared catalog")
 	}
-	if len(UserSettingsFields()) != 11 {
-		t.Fatalf("field count = %d", len(UserSettingsFields()))
+	for _, path := range []string{
+		"search.filterNastyResults", "search.filterResultsWithNoSeeders", "search.rememberQuickFilters",
+		"search.sortBy", "search.sortDirection", "search.searchResultDisplayBehavior", "search.searchResultTitleBehavior",
+		"catalog.moviesSource", "catalog.tvShowsSource", "catalog.sort", "download.folderId",
+	} {
+		if _, ok := LookupUserSettingsField(path); !ok {
+			t.Fatalf("patch field %q is not accepted", path)
+		}
 	}
 }
 
@@ -57,7 +66,7 @@ func TestApplyUserSettingsPatchCopiesDomainsOnly(t *testing.T) {
 	if _, ok := patched["extra"]; ok {
 		t.Fatal("unknown top-level field survived")
 	}
-	if patched["catalog"].(map[string]any)["sort"] != "CATALOG_SORT_POPULARITY" {
+	if catalog := patched["catalog"].(map[string]any); catalog["sort"] != "CATALOG_SORT_POPULARITY" || catalog["moviesSource"] != "MOVIES_SOURCE_YTS" {
 		t.Fatalf("patched = %#v", patched)
 	}
 	if _, ok := source["catalog"].(map[string]any)["sort"]; ok {
@@ -66,6 +75,11 @@ func TestApplyUserSettingsPatchCopiesDomainsOnly(t *testing.T) {
 	patched["search"].(map[string]any)["disabledIndexerIds"].([]any)[0] = "b"
 	if source["search"].(map[string]any)["disabledIndexerIds"].([]any)[0] != "a" {
 		t.Fatal("array aliased between source and clone")
+	}
+	nested := map[string]any{"outer": map[string]any{"inner": "value"}}
+	CloneJSONObject(nested)["outer"].(map[string]any)["inner"] = "changed"
+	if nested["outer"].(map[string]any)["inner"] != "value" {
+		t.Fatal("nested object aliased between source and clone")
 	}
 }
 

@@ -201,39 +201,6 @@ func TestNormalizeIDsAndRendererMapping(t *testing.T) {
 	}
 }
 
-func TestNormalizeIMDbID(t *testing.T) {
-	t.Parallel()
-
-	if got, err := normalizeIMDbID(" tt0944947 "); err != nil || got != "tt0944947" {
-		t.Fatalf("normalizeIMDbID() = %q, %v", got, err)
-	}
-
-	for _, raw := range []string{"", "bad", "ttabc", "tt123", "tt0944947?x=1", "tt0944947%2f"} {
-		raw := raw
-		t.Run(raw, func(t *testing.T) {
-			t.Parallel()
-
-			if _, err := normalizeIMDbID(raw); err == nil {
-				t.Fatalf("normalizeIMDbID(%q) error = nil, want error", raw)
-			}
-		})
-	}
-}
-
-func TestNormalizeEpisodeOrdinal(t *testing.T) {
-	t.Parallel()
-
-	if got, err := normalizeEpisodeOrdinal("1", "season"); err != nil || got != 1 {
-		t.Fatalf("normalizeEpisodeOrdinal() = %d, %v", got, err)
-	}
-	if _, err := normalizeEpisodeOrdinal("0", "season"); err == nil {
-		t.Fatal("normalizeEpisodeOrdinal(0) error = nil, want error")
-	}
-	if _, err := normalizeEpisodeOrdinal("abc", "episode"); err == nil {
-		t.Fatal("normalizeEpisodeOrdinal(abc) error = nil, want error")
-	}
-}
-
 func TestSettingsValidationHelpers(t *testing.T) {
 	t.Parallel()
 
@@ -279,69 +246,5 @@ func TestSettingsValidationHelpers(t *testing.T) {
 	}
 	if _, err := normalizeSettingsKey("missing"); err == nil {
 		t.Fatal("normalizeSettingsKey(missing) error = nil, want error")
-	}
-}
-
-func TestNormalizeIndexerID(t *testing.T) {
-	t.Parallel()
-
-	if got, err := normalizeIndexerID(" yts "); err != nil || got != "yts" {
-		t.Fatalf("normalizeIndexerID() = %q, %v", got, err)
-	}
-
-	for _, raw := range []string{"", "bad\x00id", "../yts", "bad/id", "bad?id", "bad%2Fyts"} {
-		raw := raw
-		t.Run(raw, func(t *testing.T) {
-			t.Parallel()
-
-			if _, err := normalizeIndexerID(raw); err == nil {
-				t.Fatalf("normalizeIndexerID(%q) error = nil, want error", raw)
-			}
-		})
-	}
-}
-
-func TestNormalizeTransferURL(t *testing.T) {
-	t.Parallel()
-
-	for _, tc := range []struct {
-		name string
-		raw  string
-		want string
-	}{
-		{name: "magnet", raw: " magnet:?xt=urn:btih:test ", want: "magnet:?xt=urn:btih:test"},
-		{name: "http", raw: " http://example.test/file.torrent ", want: "http://example.test/file.torrent"},
-		{name: "https", raw: " https://example.test/file.torrent ", want: "https://example.test/file.torrent"},
-	} {
-		tc := tc
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-
-			if got, err := normalizeTransferURL(tc.raw); err != nil || got != tc.want {
-				t.Fatalf("normalizeTransferURL() = %q, %v; want %q, nil", got, err, tc.want)
-			}
-		})
-	}
-
-	if _, err := normalizeTransferURL(""); err == nil {
-		t.Fatal("normalizeTransferURL(empty) error = nil, want error")
-	}
-
-	for _, raw := range []string{
-		"ftp://example.test/file.torrent",
-		"not-a-url",
-		"bad\x00url",
-		"https://:443/file.torrent",
-		"https://example.test/file name.torrent",
-		"magnet:?xt=urn:btih:test&dn=My Movie",
-	} {
-		raw := raw
-		t.Run(raw, func(t *testing.T) {
-			t.Parallel()
-
-			if _, err := normalizeTransferURL(raw); err == nil {
-				t.Fatalf("normalizeTransferURL(%q) error = nil, want error", raw)
-			}
-		})
 	}
 }

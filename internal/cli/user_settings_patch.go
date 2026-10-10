@@ -41,19 +41,6 @@ func supportedUserSettingsPatchHelp() string {
 	return strings.Join(lines, "\n")
 }
 
-func normalizeNullableNonNegativeInt64Value(raw string) (any, error) {
-	value, err := chill.NormalizeNullableNonNegativeInt64Value(raw)
-	return value, wrapValidationError(err)
-}
-
-func normalizeEnumValue(values map[string]string) func(string) (any, error) {
-	inner := chill.NormalizeEnumValue(values)
-	return func(raw string) (any, error) {
-		value, err := inner(raw)
-		return value, wrapValidationError(err)
-	}
-}
-
 func cloneJSONObject(source map[string]any) map[string]any {
 	return chill.CloneJSONObject(source)
 }
