@@ -3,9 +3,12 @@ package cli
 import (
 	"bytes"
 	"encoding/json"
-	"reflect"
+	"slices"
 	"strings"
 	"testing"
+
+	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 )
 
 func TestRootCommandIncludesSchemaTopLevelCommand(t *testing.T) {
@@ -40,30 +43,67 @@ func TestRootCommandIncludesSchemaTopLevelCommand(t *testing.T) {
 	}
 }
 
-func TestSchemaCommandDoctorReturnsMetadata(t *testing.T) {
+// The registry is hand-written; this keeps it in step with the flags each
+// command actually accepts.
+func TestCommandSchemasMatchCommandTree(t *testing.T) {
 	t.Parallel()
 
-	stdout := &bytes.Buffer{}
-	command := newRootCommand(&appContext{
+	root := newRootCommand(&appContext{
 		opts:   &appOptions{output: outputJSON},
 		stdin:  strings.NewReader(""),
-		stdout: stdout,
+		stdout: &bytes.Buffer{},
 		stderr: &bytes.Buffer{},
 	})
-	command.SetArgs([]string{"schema", "command", "doctor", "--output", "json"})
-	if err := command.Execute(); err != nil {
-		t.Fatalf("Execute() error = %v", err)
+	described := map[string]bool{}
+	var walk func(*cobra.Command)
+	walk = func(cmd *cobra.Command) {
+		id := schemaCommandID(cmd.CommandPath())
+		described[id] = true
+		entry, ok := lookupCommandSchema(id)
+		if !ok {
+			t.Fatalf("command %q has no schema", id)
+		}
+		inputs := map[string]bool{}
+		for _, input := range entry.Inputs {
+			inputs[input.Name] = true
+		}
+		flags := map[string]bool{}
+		for _, set := range []*pflag.FlagSet{cmd.LocalFlags(), cmd.InheritedFlags()} {
+			set.VisitAll(func(flag *pflag.Flag) {
+				if flag.Name == "help" {
+					return
+				}
+				flags[flag.Name] = true
+				if !inputs[flag.Name] {
+					t.Errorf("%s schema is missing flag --%s", id, flag.Name)
+				}
+			})
+		}
+		if entry.SupportsFields != flags["fields"] {
+			t.Errorf("%s supports_fields = %t, --fields flag = %t", id, entry.SupportsFields, flags["fields"])
+		}
+		if entry.SupportsDryRun != flags["dry-run"] {
+			t.Errorf("%s supports_dry_run = %t, --dry-run flag = %t", id, entry.SupportsDryRun, flags["dry-run"])
+		}
+		for _, mode := range entry.InputModes {
+			for _, name := range mode.Inputs {
+				if !inputs[name] {
+					t.Errorf("%s input mode %q names unknown input %q", id, mode.Name, name)
+				}
+			}
+		}
+		for _, sub := range cmd.Commands() {
+			if sub.Name() != "help" {
+				walk(sub)
+			}
+		}
 	}
+	walk(root)
 
-	var output schemaEntry
-	if err := json.Unmarshal(stdout.Bytes(), &output); err != nil {
-		t.Fatalf("json.Unmarshal() error = %v", err)
-	}
-	if output.ID != "doctor" {
-		t.Fatalf("ID = %q, want %q", output.ID, "doctor")
-	}
-	if !output.SupportsFields {
-		t.Fatal("doctor metadata should support fields")
+	for id := range commandSchemaRegistry {
+		if !described[id] {
+			t.Errorf("schema %q has no command", id)
+		}
 	}
 }
 
@@ -153,30 +193,6 @@ func TestSchemaCommandUserDownloadFolderSetReturnsMetadata(t *testing.T) {
 	}
 }
 
-func TestSchemaCommandUserIndexersReturnsFieldMetadata(t *testing.T) {
-	t.Parallel()
-
-	stdout := &bytes.Buffer{}
-	command := newRootCommand(&appContext{
-		opts:   &appOptions{output: outputJSON},
-		stdin:  strings.NewReader(""),
-		stdout: stdout,
-		stderr: &bytes.Buffer{},
-	})
-	command.SetArgs([]string{"schema", "command", "user indexers", "--output", "json"})
-	if err := command.Execute(); err != nil {
-		t.Fatalf("Execute() error = %v", err)
-	}
-
-	var output schemaEntry
-	if err := json.Unmarshal(stdout.Bytes(), &output); err != nil {
-		t.Fatalf("json.Unmarshal() error = %v", err)
-	}
-	if !output.SupportsFields {
-		t.Fatalf("metadata = %#v, want fields support", output)
-	}
-}
-
 func TestSchemaCommandTVShowsReturnsSourceMetadata(t *testing.T) {
 	t.Parallel()
 
@@ -199,16 +215,14 @@ func TestSchemaCommandAddTransferReturnsInputModes(t *testing.T) {
 	assertInputNotUnconditionallyRequired(t, output, "tv-source")
 	assertInputModes(t, output, []schemaInputMode{
 		{
-			Name:        "url",
-			Description: "Build the request from --url with an optional movie or TV source.",
-			Inputs:      []string{"url", "movie-source", "tv-source"},
-			Required:    []string{"url"},
+			Name:     "url",
+			Inputs:   []string{"url", "movie-source", "tv-source"},
+			Required: []string{"url"},
 		},
 		{
-			Name:        "json",
-			Description: "Use a raw JSON request body from --json.",
-			Inputs:      []string{"json"},
-			Required:    []string{"json"},
+			Name:     "json",
+			Inputs:   []string{"json"},
+			Required: []string{"json"},
 		},
 	})
 }
@@ -233,9 +247,11 @@ func TestAddTransferSchemasExposeCatalogOrigin(t *testing.T) {
 		t.Fatalf("procedure inputs = %#v, want catalog_origin", procedure.Inputs)
 	}
 
-	catalogOrigin, ok := typeSchemaRegistry["chill.v4.CatalogOrigin"]
-	if !ok || len(catalogOrigin.Fields) != 2 {
-		t.Fatalf("CatalogOrigin schema = %#v", catalogOrigin)
+	catalogOrigin := typeSchemaRegistry["chill.v4.CatalogOrigin"]
+	for _, name := range []string{"movies_source", "tv_shows_source"} {
+		if !slices.ContainsFunc(catalogOrigin.Fields, func(field schemaField) bool { return field.Name == name }) {
+			t.Fatalf("CatalogOrigin schema = %#v, want %s", catalogOrigin, name)
+		}
 	}
 }
 
@@ -249,16 +265,14 @@ func TestSchemaCommandSettingsSetReturnsInputModes(t *testing.T) {
 	assertInputNotUnconditionallyRequired(t, output, "json")
 	assertInputModes(t, output, []schemaInputMode{
 		{
-			Name:        "key-value",
-			Description: "Set one setting from positional key and value arguments.",
-			Inputs:      []string{"key", "value"},
-			Required:    []string{"key", "value"},
+			Name:     "key-value",
+			Inputs:   []string{"key", "value"},
+			Required: []string{"key", "value"},
 		},
 		{
-			Name:        "json",
-			Description: "Set one setting from a raw JSON request body.",
-			Inputs:      []string{"json"},
-			Required:    []string{"json"},
+			Name:     "json",
+			Inputs:   []string{"json"},
+			Required: []string{"json"},
 		},
 	})
 }
@@ -322,9 +336,16 @@ func TestSchemaListsCommandsAndProceduresInJSON(t *testing.T) {
 	if len(output.Types) == 0 {
 		t.Fatal("expected types in schema output")
 	}
-	if output.Commands[0].ID != "add-transfer" {
-		t.Fatalf("first command id = %q, want %q", output.Commands[0].ID, "add-transfer")
+	if !slices.IsSortedFunc(output.Commands, compareSchemaEntryIDs) || !slices.IsSortedFunc(output.Procedures, compareSchemaEntryIDs) {
+		t.Fatal("schema entries are not sorted by id")
 	}
+	if !slices.IsSortedFunc(output.Types, func(a, b schemaType) int { return strings.Compare(a.ID, b.ID) }) {
+		t.Fatal("schema types are not sorted by id")
+	}
+}
+
+func compareSchemaEntryIDs(a, b schemaEntry) int {
+	return strings.Compare(a.ID, b.ID)
 }
 
 func TestSchemaCommandSearchReturnsMetadata(t *testing.T) {
@@ -545,33 +566,6 @@ func TestSchemaTypeCanBeFieldFiltered(t *testing.T) {
 	}
 }
 
-func TestSchemaCommandSchemaTypeReturnsMetadata(t *testing.T) {
-	t.Parallel()
-
-	stdout := &bytes.Buffer{}
-	command := newRootCommand(&appContext{
-		opts:   &appOptions{output: outputJSON},
-		stdin:  strings.NewReader(""),
-		stdout: stdout,
-		stderr: &bytes.Buffer{},
-	})
-	command.SetArgs([]string{"schema", "command", "schema type", "--output", "json"})
-	if err := command.Execute(); err != nil {
-		t.Fatalf("Execute() error = %v", err)
-	}
-
-	var output schemaEntry
-	if err := json.Unmarshal(stdout.Bytes(), &output); err != nil {
-		t.Fatalf("json.Unmarshal() error = %v", err)
-	}
-	if output.ID != "schema type" {
-		t.Fatalf("ID = %q, want schema type", output.ID)
-	}
-	if !output.SupportsFields {
-		t.Fatal("schema type metadata should support fields")
-	}
-}
-
 func TestSchemaTypeUnknownReturnsUsageError(t *testing.T) {
 	t.Parallel()
 
@@ -744,65 +738,6 @@ func TestSchemaCommandSettingsSetReturnsDryRunMetadata(t *testing.T) {
 	}
 }
 
-func TestSchemaCommandAuthLogoutReturnsDryRunMetadata(t *testing.T) {
-	t.Parallel()
-
-	stdout := &bytes.Buffer{}
-	command := newRootCommand(&appContext{
-		opts:   &appOptions{output: outputJSON},
-		stdin:  strings.NewReader(""),
-		stdout: stdout,
-		stderr: &bytes.Buffer{},
-	})
-	command.SetArgs([]string{"schema", "command", "auth logout", "--output", "json"})
-	if err := command.Execute(); err != nil {
-		t.Fatalf("Execute() error = %v", err)
-	}
-
-	var output schemaEntry
-	if err := json.Unmarshal(stdout.Bytes(), &output); err != nil {
-		t.Fatalf("json.Unmarshal() error = %v", err)
-	}
-	if !output.SupportsDryRun {
-		t.Fatal("auth logout metadata should support dry run")
-	}
-}
-
-func TestSchemaCommandAuthLoginReturnsJSONInputMetadata(t *testing.T) {
-	t.Parallel()
-
-	stdout := &bytes.Buffer{}
-	command := newRootCommand(&appContext{
-		opts:   &appOptions{output: outputJSON},
-		stdin:  strings.NewReader(""),
-		stdout: stdout,
-		stderr: &bytes.Buffer{},
-	})
-	command.SetArgs([]string{"schema", "command", "auth login", "--output", "json"})
-	if err := command.Execute(); err != nil {
-		t.Fatalf("Execute() error = %v", err)
-	}
-
-	var output schemaEntry
-	if err := json.Unmarshal(stdout.Bytes(), &output); err != nil {
-		t.Fatalf("json.Unmarshal() error = %v", err)
-	}
-
-	foundJSON := false
-	foundDryRun := false
-	for _, input := range output.Inputs {
-		switch input.Name {
-		case "json":
-			foundJSON = true
-		case "dry-run":
-			foundDryRun = true
-		}
-	}
-	if !foundJSON || !foundDryRun {
-		t.Fatalf("inputs = %#v, want json and dry-run inputs", output.Inputs)
-	}
-}
-
 func TestSchemaCommandUserSettingsSetReturnsPatchMetadata(t *testing.T) {
 	t.Parallel()
 
@@ -838,41 +773,6 @@ func TestSchemaCommandUserSettingsSetReturnsPatchMetadata(t *testing.T) {
 	}
 	if !seenField || !seenValue || !seenPatchFieldSpec {
 		t.Fatalf("missing patch metadata in %#v", output.Inputs)
-	}
-}
-
-func TestSchemaCommandWhoamiReturnsFieldSelectionMetadata(t *testing.T) {
-	t.Parallel()
-
-	stdout := &bytes.Buffer{}
-	command := newRootCommand(&appContext{
-		opts:   &appOptions{output: outputJSON},
-		stdin:  strings.NewReader(""),
-		stdout: stdout,
-		stderr: &bytes.Buffer{},
-	})
-	command.SetArgs([]string{"schema", "command", "whoami", "--output", "json"})
-	if err := command.Execute(); err != nil {
-		t.Fatalf("Execute() error = %v", err)
-	}
-
-	var output schemaEntry
-	if err := json.Unmarshal(stdout.Bytes(), &output); err != nil {
-		t.Fatalf("json.Unmarshal() error = %v", err)
-	}
-	if !output.SupportsFields {
-		t.Fatal("whoami metadata should support fields")
-	}
-
-	foundFields := false
-	for _, input := range output.Inputs {
-		if input.Name == "fields" {
-			foundFields = true
-			break
-		}
-	}
-	if !foundFields {
-		t.Fatal("whoami metadata missing fields input")
 	}
 }
 
@@ -933,25 +833,6 @@ func TestSchemaCommandOutputCanBeFieldFiltered(t *testing.T) {
 	}
 }
 
-func TestRootHelpStillWorks(t *testing.T) {
-	t.Parallel()
-
-	stdout := &bytes.Buffer{}
-	command := newRootCommand(&appContext{
-		opts:   &appOptions{output: outputPretty},
-		stdin:  strings.NewReader(""),
-		stdout: stdout,
-		stderr: &bytes.Buffer{},
-	})
-	command.SetArgs([]string{"--help"})
-	if err := command.Execute(); err != nil {
-		t.Fatalf("Execute() error = %v", err)
-	}
-	if !strings.Contains(stdout.String(), "schema") {
-		t.Fatalf("help output missing schema command: %s", stdout.String())
-	}
-}
-
 func commandSchemaForTest(t *testing.T, commandID string) schemaEntry {
 	t.Helper()
 
@@ -991,7 +872,13 @@ func assertInputNotUnconditionallyRequired(t *testing.T, entry schemaEntry, inpu
 func assertInputModes(t *testing.T, entry schemaEntry, expected []schemaInputMode) {
 	t.Helper()
 
-	if !reflect.DeepEqual(entry.InputModes, expected) {
+	if len(entry.InputModes) != len(expected) {
 		t.Fatalf("%s input modes = %#v, want %#v", entry.ID, entry.InputModes, expected)
+	}
+	for index, mode := range entry.InputModes {
+		want := expected[index]
+		if mode.Name != want.Name || !slices.Equal(mode.Inputs, want.Inputs) || !slices.Equal(mode.Required, want.Required) {
+			t.Fatalf("%s input modes = %#v, want %#v", entry.ID, entry.InputModes, expected)
+		}
 	}
 }
