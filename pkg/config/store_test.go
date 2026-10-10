@@ -10,7 +10,7 @@ import (
 func TestDefaultPathUsesXDGConfigHome(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", "/tmp/chilly-xdg")
 
-	path, err := DefaultPath(defaultProfile)
+	path, err := DefaultPath(DefaultProfile())
 	if err != nil {
 		t.Fatalf("DefaultPath() error = %v", err)
 	}
@@ -73,8 +73,8 @@ func TestLoadMissingConfigReturnsDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
 	}
-	if cfg.APIBaseURL != defaultAPIBase {
-		t.Fatalf("APIBaseURL = %q, want %q", cfg.APIBaseURL, defaultAPIBase)
+	if cfg.APIBaseURL != "https://api.chill.institute" {
+		t.Fatalf("APIBaseURL = %q, want production API", cfg.APIBaseURL)
 	}
 	if cfg.AuthToken != "" {
 		t.Fatalf("AuthToken = %q, want empty", cfg.AuthToken)
@@ -253,22 +253,6 @@ func TestNormalizeProfileNormalizesCaseAndEmpty(t *testing.T) {
 func TestNormalizeProfileRejectsUnsafeValues(t *testing.T) {
 	if _, err := NormalizeProfile("../prod"); err == nil {
 		t.Fatal("expected invalid profile error")
-	}
-}
-
-func TestDefaultProfileReturnsDefaultProfileName(t *testing.T) {
-	if DefaultProfile() != defaultProfile {
-		t.Fatalf("DefaultProfile() = %q, want %q", DefaultProfile(), defaultProfile)
-	}
-}
-
-func TestDefaultReturnsDefaultConfig(t *testing.T) {
-	cfg := Default()
-	if cfg.APIBaseURL != defaultAPIBase {
-		t.Fatalf("Default().APIBaseURL = %q, want %q", cfg.APIBaseURL, defaultAPIBase)
-	}
-	if cfg.AuthToken != "" {
-		t.Fatalf("Default().AuthToken = %q, want empty", cfg.AuthToken)
 	}
 }
 

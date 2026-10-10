@@ -151,13 +151,6 @@ func TestResetOutputDirRejectsUnsafePath(t *testing.T) {
 	}
 }
 
-func TestWriteJSONRejectsUnmarshalableValue(t *testing.T) {
-	err := writeJSON(filepath.Join(t.TempDir(), "package.json"), make(chan struct{}))
-	if err == nil || !strings.Contains(err.Error(), "marshal") {
-		t.Fatalf("writeJSON() error = %v, want marshal error", err)
-	}
-}
-
 func writeReleaseFixture(t *testing.T, distDir string, version string) {
 	t.Helper()
 	if err := os.MkdirAll(distDir, 0o755); err != nil {

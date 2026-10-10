@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -54,9 +55,6 @@ func TestNewClientDefaults(t *testing.T) {
 	t.Parallel()
 
 	client := NewClient(nil)
-	if client.baseURL != defaultAPIBase {
-		t.Fatalf("baseURL = %q, want %q", client.baseURL, defaultAPIBase)
-	}
 	if client.httpClient == nil || client.httpClient.Timeout == 0 {
 		t.Fatalf("httpClient = %#v, want default timeout", client.httpClient)
 	}
@@ -284,34 +282,33 @@ func TestValidateVersionRejectsPathTraversal(t *testing.T) {
 func TestLatestAndByTag(t *testing.T) {
 	t.Parallel()
 
+	var requested []string
 	client := NewClient(&http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
-		payload, err := json.Marshal(Release{
-			TagName: "v1.2.3",
-			Assets: []ReleaseAsset{
-				{Name: "chilly_1.2.3_darwin_arm64.tar.gz", BrowserDownloadURL: "https://github.com/chill-institute/chill-cli/releases/download/v1.2.3/chilly_1.2.3_darwin_arm64.tar.gz"},
-			},
-		})
+		requested = append(requested, request.URL.String())
+		payload, err := json.Marshal(Release{TagName: "1.2.3"})
 		if err != nil {
 			return nil, err
 		}
-		return jsonResponse(payload), nil
+		return okResponse(payload), nil
 	})})
-	client.baseURL = "https://api.github.com"
 
 	release, err := client.Latest(context.Background())
 	if err != nil {
 		t.Fatalf("Latest() error = %v", err)
 	}
 	if release.TagName != "v1.2.3" {
-		t.Fatalf("TagName = %q", release.TagName)
+		t.Fatalf("TagName = %q, want normalized v1.2.3", release.TagName)
 	}
-
-	taggedRelease, err := client.ByTag(context.Background(), "1.2.3")
-	if err != nil {
+	if _, err := client.ByTag(context.Background(), "1.2.3"); err != nil {
 		t.Fatalf("ByTag() error = %v", err)
 	}
-	if taggedRelease.TagName != "v1.2.3" {
-		t.Fatalf("TagName = %q", taggedRelease.TagName)
+
+	want := []string{
+		"https://api.github.com/repos/chill-institute/chill-cli/releases/latest",
+		"https://api.github.com/repos/chill-institute/chill-cli/releases/tags/v1.2.3",
+	}
+	if !slices.Equal(requested, want) {
+		t.Fatalf("requested = %q, want %q", requested, want)
 	}
 }
 
@@ -322,7 +319,7 @@ func TestDownload(t *testing.T) {
 		if request.URL.String() != "https://github.com/chill-institute/chill-cli/releases/download/v1.2.3/chilly_1.2.3_darwin_arm64.tar.gz" {
 			t.Fatalf("request.URL = %q", request.URL.String())
 		}
-		return binaryResponse([]byte("archive-bytes")), nil
+		return okResponse([]byte("archive-bytes")), nil
 	})})
 	payload, err := client.Download(context.Background(), "https://github.com/chill-institute/chill-cli/releases/download/v1.2.3/chilly_1.2.3_darwin_arm64.tar.gz")
 	if err != nil {
@@ -593,15 +590,7 @@ func (fn roundTripFunc) RoundTrip(request *http.Request) (*http.Response, error)
 	return fn(request)
 }
 
-func jsonResponse(payload []byte) *http.Response {
-	return &http.Response{
-		StatusCode: http.StatusOK,
-		Body:       io.NopCloser(bytes.NewReader(payload)),
-		Header:     make(http.Header),
-	}
-}
-
-func binaryResponse(payload []byte) *http.Response {
+func okResponse(payload []byte) *http.Response {
 	return &http.Response{
 		StatusCode: http.StatusOK,
 		Body:       io.NopCloser(bytes.NewReader(payload)),
