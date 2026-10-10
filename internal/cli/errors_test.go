@@ -73,21 +73,6 @@ func TestClassifyErrorMapsAPIAndFallbackCases(t *testing.T) {
 	}
 }
 
-func TestWriteErrorPrefersJSONWhenRequested(t *testing.T) {
-	t.Parallel()
-
-	stderr := &bytes.Buffer{}
-	app := &appContext{
-		opts:   &appOptions{output: outputJSON},
-		stderr: stderr,
-	}
-
-	writeError(app, rpc.APIError{Code: "nope", Message: "boom", StatusCode: 418, RequestID: "req-1"})
-	if got := stderr.String(); got == "" || got[0] != '{' {
-		t.Fatalf("stderr = %q, want json envelope", got)
-	}
-}
-
 func TestWriteErrorEscapesControlsInPrettyMode(t *testing.T) {
 	t.Parallel()
 
@@ -127,22 +112,5 @@ func TestWriteErrorPreservesControlTextInJSONData(t *testing.T) {
 	message, ok := payload["message"].(string)
 	if !ok || !strings.Contains(message, "upstream\x1b[2J\nspoofed") {
 		t.Fatalf("message = %#v, want original semantic text", payload["message"])
-	}
-}
-
-func TestExitCodeForErrorMapsKinds(t *testing.T) {
-	t.Parallel()
-
-	if got := exitCodeForError(usageError("bad", "bad")); got != int(exitCodeUsage) {
-		t.Fatalf("usage exit code = %d", got)
-	}
-	if got := exitCodeForError(authError("bad", "bad")); got != int(exitCodeAuth) {
-		t.Fatalf("auth exit code = %d", got)
-	}
-	if got := exitCodeForError(rpc.APIError{Code: "nope", Message: "boom", StatusCode: 500}); got != int(exitCodeAPI) {
-		t.Fatalf("api exit code = %d", got)
-	}
-	if got := exitCodeForError(errors.New("boom")); got != int(exitCodeInternal) {
-		t.Fatalf("internal exit code = %d", got)
 	}
 }

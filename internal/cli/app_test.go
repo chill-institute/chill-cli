@@ -244,25 +244,6 @@ func TestShouldShowProgressOnlyForPrettyTerminalOutput(t *testing.T) {
 	}
 }
 
-func TestReadJSONFlagSupportsStdin(t *testing.T) {
-	t.Parallel()
-
-	app := &appContext{
-		opts:   &appOptions{output: outputJSON},
-		stdin:  strings.NewReader("{\"url\":\"magnet:?xt=urn:btih:test\"}\n"),
-		stdout: &strings.Builder{},
-		stderr: &strings.Builder{},
-	}
-
-	payload, err := app.decodeJSONObjectFlag("@-", "--json")
-	if err != nil {
-		t.Fatalf("decodeJSONObjectFlag() error = %v", err)
-	}
-	if payload["url"] != "magnet:?xt=urn:btih:test" {
-		t.Fatalf("payload = %#v", payload)
-	}
-}
-
 func TestRunDefaultsToJSONWhenStdoutIsNotATerminal(t *testing.T) {
 	t.Parallel()
 

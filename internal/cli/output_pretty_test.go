@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -93,7 +94,7 @@ func TestRenderSearchPretty(t *testing.T) {
 	results := make([]any, 0, 11)
 	for index := range 11 {
 		results = append(results, map[string]any{
-			"title":       "Result",
+			"title":       fmt.Sprintf("Result %d", index+1),
 			"indexerName": "YTS",
 			"size":        "1.4 GB",
 			"seeders":     float64(index + 1),
@@ -115,15 +116,19 @@ func TestRenderSearchPretty(t *testing.T) {
 	for _, fragment := range []string{
 		"Results: 11",
 		"Query: dune",
-		"1. Result",
+		"1. Result 1",
 		"Indexer: YTS",
 		"Seeds: 1",
 		"Peers: 2",
+		"10. Result 10",
 		"... 1 more results omitted.",
 	} {
 		if !strings.Contains(stripANSI(rendered), fragment) {
 			t.Fatalf("rendered = %q, want fragment %q", rendered, fragment)
 		}
+	}
+	if strings.Contains(stripANSI(rendered), "Result 11") {
+		t.Fatalf("rendered = %q, want results past the list limit omitted", rendered)
 	}
 }
 
@@ -362,6 +367,11 @@ func TestRenderUserIndexersPretty(t *testing.T) {
 				"enabled": true,
 				"status":  "INDEXER_STATUS_DEGRADED",
 			},
+			map[string]any{
+				"id":      "rarbg",
+				"name":    "RARBG",
+				"enabled": false,
+			},
 		},
 	})
 	if err != nil {
@@ -370,10 +380,13 @@ func TestRenderUserIndexersPretty(t *testing.T) {
 	if !ok {
 		t.Fatal("renderUserIndexersPretty() ok = false, want true")
 	}
-	for _, fragment := range []string{"Indexers: 2", "1. YTS [yts]", "Enabled: enabled", "Indexer Status: ready", "2. The Pirate Bay [tbp]", "Indexer Status: degraded"} {
+	for _, fragment := range []string{"Indexers: 3", "1. YTS [yts]", "Enabled: enabled", "Indexer Status: ready", "2. The Pirate Bay [tbp]", "Indexer Status: degraded", "3. RARBG [rarbg]", "Enabled: disabled"} {
 		if !strings.Contains(stripANSI(rendered), fragment) {
 			t.Fatalf("rendered = %q, want fragment %q", rendered, fragment)
 		}
+	}
+	if _, unknown, _ := strings.Cut(stripANSI(rendered), "3. RARBG [rarbg]"); strings.Contains(unknown, "Indexer Status") {
+		t.Fatalf("rendered = %q, want no status line for an indexer without status", rendered)
 	}
 }
 
@@ -406,6 +419,7 @@ func TestRenderUserSettingsPrettyNestedDomains(t *testing.T) {
 		"search": map[string]any{
 			"sortBy":             "SORT_BY_SEEDERS",
 			"filterNastyResults": true,
+			"resolutionFilters":  []any{"1080p", "2160p"},
 		},
 		"download": map[string]any{
 			"folderId": "42",
@@ -418,7 +432,7 @@ func TestRenderUserSettingsPrettyNestedDomains(t *testing.T) {
 		t.Fatal("renderUserSettingsPretty() ok = false, want true")
 	}
 	stripped := stripANSI(rendered)
-	for _, fragment := range []string{"User Settings", "download:", "folderId: 42", "search:", "filterNastyResults: true", "sortBy: SORT_BY_SEEDERS"} {
+	for _, fragment := range []string{"User Settings", "download:", "folderId: 42", "search:", "filterNastyResults: true", "resolutionFilters: 1080p, 2160p", "sortBy: SORT_BY_SEEDERS"} {
 		if !strings.Contains(stripped, fragment) {
 			t.Fatalf("rendered = %q, want fragment %q", rendered, fragment)
 		}
@@ -430,10 +444,11 @@ func TestRenderDownloadFolderPretty(t *testing.T) {
 
 	rendered, ok, err := renderDownloadFolderPretty(map[string]any{
 		"folder": map[string]any{
-			"name":      "Movies",
-			"id":        "42",
-			"file_type": "FOLDER",
-			"is_shared": true,
+			"name":       "Movies",
+			"id":         "42",
+			"file_type":  "FOLDER",
+			"created_at": "2026-03-17",
+			"is_shared":  true,
 		},
 	})
 	if err != nil {
@@ -442,7 +457,7 @@ func TestRenderDownloadFolderPretty(t *testing.T) {
 	if !ok {
 		t.Fatal("renderDownloadFolderPretty() ok = false, want true")
 	}
-	for _, fragment := range []string{"Download Folder", "Name: Movies", "ID: 42", "Type: FOLDER", "Shared: true"} {
+	for _, fragment := range []string{"Download Folder", "Name: Movies", "ID: 42", "Type: FOLDER", "Created: 2026-03-17", "Shared: true"} {
 		if !strings.Contains(stripANSI(rendered), fragment) {
 			t.Fatalf("rendered = %q, want fragment %q", rendered, fragment)
 		}
@@ -494,6 +509,7 @@ func TestRenderTransferPretty(t *testing.T) {
 			"errorMessage":         "none",
 			"fileUrl":              "https://put.io/files/42",
 			"fileId":               "file-42",
+			"file_id":              "ignored-snake-case",
 			"estimatedTimeSeconds": float64(12),
 		},
 	})
@@ -581,66 +597,21 @@ func TestRenderDoctorPretty(t *testing.T) {
 	}
 }
 
-func TestPrettyHelpers(t *testing.T) {
+func TestStringValueRendersJSONScalars(t *testing.T) {
 	t.Parallel()
 
 	payload := map[string]any{
-		"name":        " Dune ",
-		"count":       float64(7),
-		"fraction":    float64(7.5),
-		"enabled":     true,
-		"is_shared":   false,
-		"created_at":  "2026-03-17",
-		"nested_name": "nested",
+		"name":    " Dune ",
+		"count":   float64(7),
+		"enabled": true,
+		"blank":   " ",
 	}
-
-	if status := prettyIndexerStatus("INDEXER_STATUS_READY"); status != "ready" {
-		t.Fatalf("prettyIndexerStatus() = %q", status)
+	for key, want := range map[string]string{"name": "Dune", "count": "7", "enabled": "true"} {
+		if got, ok := stringValue(payload, key); !ok || got != want {
+			t.Fatalf("stringValue(%s) = %q, %t; want %q", key, got, ok, want)
+		}
 	}
-	if status := prettyIndexerStatus("INDEXER_STATUS_DEGRADED"); status != "degraded" {
-		t.Fatalf("prettyIndexerStatus(degraded) = %q", status)
-	}
-	if status := prettyIndexerStatus(""); status != "" {
-		t.Fatalf("prettyIndexerStatus(empty) = %q", status)
-	}
-	if got, ok := stringValue(payload, "name"); !ok || got != "Dune" {
-		t.Fatalf("stringValue(name) = %q, %t", got, ok)
-	}
-	if got, ok := stringValue(payload, "count"); !ok || got != "7" {
-		t.Fatalf("stringValue(count) = %q, %t", got, ok)
-	}
-	if got, ok := stringValue(payload, "enabled"); !ok || got != "true" {
-		t.Fatalf("stringValue(enabled) = %q, %t", got, ok)
-	}
-	if got := formatNumeric(7.5); got != "7.5" {
-		t.Fatalf("formatNumeric() = %q", got)
-	}
-	if got := prettyValue([]any{"a", float64(2), true}); got != "a, 2, true" {
-		t.Fatalf("prettyValue(slice) = %q", got)
-	}
-
-	lines := []string{}
-	lines = appendIfString(lines, "Name", payload, "name")
-	lines = appendDoctorLine(lines, "Enabled", payload, "enabled")
-	lines = appendDetailLine(lines, "Created", payload, "created_at")
-	if len(lines) != 3 {
-		t.Fatalf("lines = %#v", lines)
-	}
-
-	fileLines := prettyUserFileLines(map[string]any{
-		"name":       "Movies",
-		"id":         "42",
-		"file_type":  "FOLDER",
-		"created_at": "2026-03-17",
-		"is_shared":  false,
-	})
-	if len(fileLines) != 5 {
-		t.Fatalf("prettyUserFileLines() = %#v", fileLines)
-	}
-	if got := firstPresent(map[string]any{"other": 1, "id": "42"}, "id", "other"); got != "42" {
-		t.Fatalf("firstPresent() = %#v", got)
-	}
-	if got := min(2, 3); got != 2 {
-		t.Fatalf("min() = %d", got)
+	if _, ok := stringValue(payload, "blank"); ok {
+		t.Fatal("stringValue(blank) ok = true, want false")
 	}
 }

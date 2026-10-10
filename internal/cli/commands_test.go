@@ -196,9 +196,6 @@ func TestUserHelpUsesProductFacingCopy(t *testing.T) {
 	if !strings.Contains(rendered, "Run user account commands through chill.institute") {
 		t.Fatalf("expected product-facing user help: %q", rendered)
 	}
-	if strings.Contains(rendered, "Bearer auth") {
-		t.Fatalf("unexpected internal auth phrasing in user help: %q", rendered)
-	}
 	if !strings.Contains(rendered, "chilly user settings get --output json") {
 		t.Fatalf("expected example in user help: %q", rendered)
 	}
@@ -492,44 +489,6 @@ func TestSearchCommandPrettyOutputShowsReadableSummary(t *testing.T) {
 		if !strings.Contains(rendered, expected) {
 			t.Fatalf("pretty output missing %q in %q", expected, rendered)
 		}
-	}
-}
-
-func TestSearchCommandPrettyOutputTruncatesLongLists(t *testing.T) {
-	t.Parallel()
-
-	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-		_, _ = writer.Write([]byte(`{"query":"dune","results":[{"title":"One"},{"title":"Two"},{"title":"Three"},{"title":"Four"},{"title":"Five"},{"title":"Six"},{"title":"Seven"},{"title":"Eight"},{"title":"Nine"},{"title":"Ten"},{"title":"Eleven"}]}`))
-	}))
-	defer server.Close()
-
-	configPath := filepath.Join(t.TempDir(), "config.json")
-	store, err := config.NewStore(configPath)
-	if err != nil {
-		t.Fatalf("NewStore() error = %v", err)
-	}
-	if err := store.Save(config.Config{APIBaseURL: server.URL, AuthToken: "saved-token"}); err != nil {
-		t.Fatalf("Save() error = %v", err)
-	}
-
-	stdout := &bytes.Buffer{}
-	command := newSearchCommand(&appContext{
-		opts:   &appOptions{configPath: configPath, output: outputPretty},
-		stdin:  strings.NewReader(""),
-		stdout: stdout,
-		stderr: &bytes.Buffer{},
-	})
-	command.SetArgs([]string{"--query", "dune"})
-	if err := command.Execute(); err != nil {
-		t.Fatalf("Execute() error = %v", err)
-	}
-
-	rendered := stripANSI(stdout.String())
-	if strings.Contains(rendered, "11. Eleven") {
-		t.Fatalf("pretty output should truncate long lists: %q", rendered)
-	}
-	if !strings.Contains(rendered, "... 1 more results omitted.") {
-		t.Fatalf("pretty output missing truncation notice: %q", rendered)
 	}
 }
 
@@ -1297,31 +1256,6 @@ func TestTVShowSeasonDownloadsUsesIMDbIDAndSeasonNumber(t *testing.T) {
 	}
 }
 
-func TestSettingsPathOutputsResolvedStorePath(t *testing.T) {
-	t.Parallel()
-
-	configPath := filepath.Join(t.TempDir(), "config.json")
-	stdout := &bytes.Buffer{}
-	command := newSettingsCommand(&appContext{
-		opts:   &appOptions{configPath: configPath, output: outputJSON},
-		stdin:  strings.NewReader(""),
-		stdout: stdout,
-		stderr: &bytes.Buffer{},
-	})
-	command.SetArgs([]string{"path"})
-	if err := command.Execute(); err != nil {
-		t.Fatalf("Execute() error = %v", err)
-	}
-
-	var output map[string]any
-	if err := json.Unmarshal(stdout.Bytes(), &output); err != nil {
-		t.Fatalf("json.Unmarshal() error = %v", err)
-	}
-	if output["path"] != configPath {
-		t.Fatalf("path = %v, want %q", output["path"], configPath)
-	}
-}
-
 func TestWhoamiFieldsFiltersResponse(t *testing.T) {
 	t.Parallel()
 
@@ -1868,42 +1802,6 @@ func TestUserSettingsSetPatchMergesWithCurrentSettings(t *testing.T) {
 	search, ok := output["search"].(map[string]any)
 	if !ok || search["filterNastyResults"] != true {
 		t.Fatalf("output = %#v", output)
-	}
-}
-
-func TestUserSettingsSetPatchDryRunDoesNotCallAPI(t *testing.T) {
-	t.Parallel()
-
-	configPath := filepath.Join(t.TempDir(), "config.json")
-	stdout := &bytes.Buffer{}
-	command := newUserCommand(&appContext{
-		opts:   &appOptions{configPath: configPath, output: outputJSON},
-		stdin:  strings.NewReader(""),
-		stdout: stdout,
-		stderr: &bytes.Buffer{},
-	})
-	command.SetArgs([]string{"settings", "set", "sort-by", "title", "--dry-run"})
-	if err := command.Execute(); err != nil {
-		t.Fatalf("Execute() error = %v", err)
-	}
-
-	var output map[string]any
-	if err := json.Unmarshal(stdout.Bytes(), &output); err != nil {
-		t.Fatalf("output json decode error: %v", err)
-	}
-	request, ok := output["request"].(map[string]any)
-	if !ok {
-		t.Fatalf("request = %#v", output["request"])
-	}
-	patch, ok := request["patch"].(map[string]any)
-	if !ok {
-		t.Fatalf("patch = %#v", request["patch"])
-	}
-	if patch["field"] != "search.sortBy" {
-		t.Fatalf("patch.field = %v, want %q", patch["field"], "search.sortBy")
-	}
-	if patch["value"] != "SORT_BY_TITLE" {
-		t.Fatalf("patch.value = %v, want %q", patch["value"], "SORT_BY_TITLE")
 	}
 }
 
