@@ -1075,6 +1075,7 @@ var typeSchemaRegistry = map[string]schemaType{
 			schemaFieldFor("indexer", "string"),
 			schemaFieldFor("season_number", "integer"),
 			optionalSchemaField("episode_number", "integer"),
+			schemaFieldFor("id", "string"),
 		},
 	},
 	"chill.v4.TVShowEpisode": {
@@ -1153,6 +1154,7 @@ var typeSchemaRegistry = map[string]schemaType{
 			schemaFieldFor("file_type", "string"),
 			schemaFieldFor("is_shared", "boolean"),
 			schemaFieldFor("created_at", "string"),
+			optionalSchemaField("release_info", typeReleaseInfo),
 		},
 	},
 	"chill.v4.UserGetIndexersResponse": {
