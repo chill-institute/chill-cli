@@ -1,41 +1,32 @@
 # Mutate Reference
 
-Use this reference for side-effecting commands.
+Run each command with `--dry-run` first. Use `--json` or `--json @-` when you
+already know the exact request body.
 
-## Rules
+## Transfers
 
-- Use `--dry-run --output json` before executing a mutation.
-- Prefer `--json` or `--json @-` when you already know the exact request body.
-- Keep `stdout` for the contract and ignore `stderr` for parsing.
-- After a hosted mutation, rerun a read command to observe real server state instead of inferring it from the mutation response alone.
+`add-transfer` accepts `magnet:?` links and `http://` or `https://` URLs with a
+host; anything else fails locally.
 
-## Transfer Mutations
+- Preview: `chilly add-transfer --url "magnet:?xt=..." --dry-run --output json`
+- Attribute a catalog: add `--movie-source trakt` or `--tv-source netflix`.
+  These flags are mutually exclusive and do not combine with `--json`; omit
+  both for a direct or search send.
+- Exact body: `printf '{"url":"magnet:?xt=...","catalogOrigin":{"moviesSource":"MOVIES_SOURCE_TRAKT"}}' | chilly add-transfer --json @- --dry-run --output json`
 
-- `add-transfer` accepts `magnet:?` links and `http://` or `https://` URLs with a host. Other schemes, plain strings, control characters, and unescaped whitespace fail locally during dry-run.
-- Preview add-transfer: `chilly add-transfer --url "magnet:?xt=..." --dry-run --output json`
-- Attribute a known movie catalog: `chilly add-transfer --url "magnet:?xt=..." --movie-source trakt --dry-run --output json`
-- Attribute a known TV catalog: `chilly add-transfer --url "magnet:?xt=..." --tv-source netflix --dry-run --output json`
-- `--movie-source` and `--tv-source` are mutually exclusive and cannot be combined with `--json`. Omit both for a direct or generic-search send.
-- Exact request body: `printf '{"url":"magnet:?xt=...","catalogOrigin":{"moviesSource":"MOVIES_SOURCE_TRAKT"}}' | chilly add-transfer --json @- --dry-run --output json`
+## Hosted Settings
 
-## Hosted Settings Mutations
+- One field: `chilly user settings set sort-by title --dry-run --output json`
+- Full replacement: pipe a complete settings object, as
+  `chilly user settings get --output json` returns it, to
+  `chilly user settings set --json @- --dry-run --output json`.
+- Download folder: `chilly user download-folder set 42 --dry-run --output json`
+  or `chilly user download-folder clear --dry-run --output json`
+- Browse TV providers with `chilly tv-shows --source <provider>`; patch
+  `catalog.tvShowsSource` only to manage the saved setting.
 
-- Exact full replacement body: `printf '{"settings":{"search":{"filterNastyResults":true,"filterResultsWithNoSeeders":false,"rememberQuickFilters":false,"disabledIndexerIds":[],"resolutionFilters":[],"codecFilters":[],"otherFilters":[],"sortBy":"SORT_BY_SEEDERS","sortDirection":"SORT_DIRECTION_DESC","searchResultDisplayBehavior":"SEARCH_RESULT_DISPLAY_BEHAVIOR_FASTEST","searchResultTitleBehavior":"SEARCH_RESULT_TITLE_BEHAVIOR_TEXT"},"catalog":{"moviesSource":"MOVIES_SOURCE_YTS","tvShowsSource":"TV_SHOWS_SOURCE_ALL_PROVIDERS"},"download":{"folderId":42}}}' | chilly user settings set --json @- --dry-run --output json`
-- TV provider browsing is per-request. Prefer `chilly tv-shows --source <provider>` for reads; patch `catalog.tvShowsSource` only when explicitly managing persisted settings compatibility.
-- One-field patch: `chilly user settings set sort-by title --dry-run --output json`
+## Local and Update
 
-## Download Folder Mutations
-
-- Patch by ID: `chilly user download-folder set 42 --dry-run --output json`
-- Clear by patch: `chilly user download-folder clear --dry-run --output json`
-
-## Local Mutations
-
-- Local API host preview: `chilly settings set api-base-url https://api.chill.institute --dry-run --output json`
-- Local API host from stdin JSON: `printf '{"key":"api-base-url","value":"https://api.chill.institute"}' | chilly settings set --json @- --dry-run --output json`
-
-## Update Mutations
-
-- Check only: `chilly self-update --check --output json`
-- Check with exact request body: `chilly self-update --json '{"check":true}' --output json`
-- Preview install resolution: `chilly self-update --version v0.1.0 --dry-run --output json`
+- API host: `chilly settings set api-base-url https://api.chill.institute --dry-run --output json`
+- Check for updates: `chilly self-update --check --output json`
+- Preview an install: `chilly self-update --version v0.1.0 --dry-run --output json`

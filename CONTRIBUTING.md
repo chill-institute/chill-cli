@@ -1,46 +1,25 @@
 # Contributing
 
-`chilly` is both a human CLI and an agent-facing contract. Preserve interactive
-output, JSON behavior, exit codes, and safe mutation previews together.
-
-## Start
-
 ```bash
 mise install
-mise run hooks
-go run ./cmd/chilly version --output json
+mise run hooks   # pre-commit formats staged Go; pre-push runs verify
 mise run verify
-```
-
-Useful focused checks:
-
-```bash
 mise run smoke
-mise run fmt
-mise run coverage:report
-mise run security
 ```
 
-Git hooks delegate to `mise.toml`: pre-commit formats staged Go files and
-pre-push runs the canonical verification gate.
+`chilly` is a human CLI and an agent contract: keep terminal output, JSON,
+exit codes, and `--dry-run` previews working together. For command changes,
+check `--help`, `schema`, and `--describe` output; update tests and
+[the bundled skill](./skills/chilly-cli/SKILL.md); and note compatibility risk
+in the pull request.
 
 ## Hosted Integration
 
-Live tests are opt-in and require an API URL and user token, from the
-environment or an ignored `.env.local`:
+Opt-in live tests need an API URL and user token, from the environment or an
+ignored `.env.local`:
 
 ```bash
-CHILLY_TEST_API_URL=https://api.chill.institute \
-CHILLY_TEST_TOKEN=... \
-mise run test:integration
+CHILLY_TEST_API_URL=https://api.chill.institute CHILLY_TEST_TOKEN=... mise run test:integration
 ```
 
-## Change the Command Surface
-
-- Check `chilly <command> --help`, `schema`, and `--describe` output.
-- Keep result data on `stdout`; prompts and diagnostics belong on `stderr`.
-- Update tests, examples, and `skills/chilly-cli/` with user-facing changes.
-- Explain compatibility or migration risk in the pull request.
-
-Merges to `main` release from Conventional Commits; see
-[Delivery](./docs/ARCHITECTURE.md#delivery) for automation and tag recovery.
+`main` releases from Conventional Commits ([delivery](./docs/architecture.md#delivery)).
