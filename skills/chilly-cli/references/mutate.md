@@ -33,8 +33,6 @@ Use this reference for side-effecting commands.
 
 - Local API host preview: `chilly settings set api-base-url https://api.chill.institute --dry-run --output json`
 - Local API host from stdin JSON: `printf '{"key":"api-base-url","value":"https://api.chill.institute"}' | chilly settings set --json @- --dry-run --output json`
-- Auth login preview: `printf '{"token":"token-from-setup","skip_verify":true}' | chilly auth login --json @- --dry-run --output json`
-- Auth logout preview: `chilly auth logout --dry-run --output json`
 
 ## Update Mutations
 

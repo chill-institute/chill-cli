@@ -21,7 +21,6 @@ Use this reference when you need runtime truth about the current CLI surface.
 - Discover TV source input: `chilly schema command tv-shows --fields inputs.name,inputs.description --output json`
 - When command metadata includes `input_modes`, treat each mode as an either/or path. Do not treat flat `inputs[].required` as a substitute for mode-specific `required` lists.
 - Type metadata includes protobuf field names and protobuf JSON names. For field masks, snake_case protobuf names such as `results.release_info.bit_depth` are accepted as aliases for protobuf JSON names such as `results.releaseInfo.bitDepth`.
-- Local contract drift check: `mise run contracts:check`
 
 ## Local Diagnostics
 

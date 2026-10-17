@@ -39,9 +39,3 @@ Use this reference for read-only workflows against the hosted API.
 - Use `--source` for TV catalog reads. Do not patch `catalog.tvShowsSource` just to browse a provider.
 - Discover current values with `chilly schema command tv-shows --fields inputs --output json`.
 - The CLI sends protobuf JSON enum strings such as `TV_SHOWS_SOURCE_HULU`; parse the response `source` field to confirm which source the API returned.
-
-## Environment Reads
-
-- Current host: `chilly settings get api-base-url --fields value --output json`
-- Config path: `chilly settings path --fields path --output json`
-- Local state overview: `chilly doctor --fields auth.status,config.profile,config.api_base_url --output json`

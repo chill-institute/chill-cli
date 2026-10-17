@@ -26,9 +26,7 @@ The pre-push hook runs `mise run verify`.
 | GoReleaser config | `goreleaser release --snapshot --clean` twice; `dist/checksums.txt` must match | local | `dist/` |
 | Release and packaging | push to `main`; recover by dispatching [Main](./.github/workflows/main.yml) with `tag` (`dry_run` defaults on) | [main](./.github/workflows/main.yml) `release`, `publish` | tag, immutable GitHub release with 7 assets and provenance, npm packages and a signed Homebrew formula commit built from the published assets |
 
-Only `feat` (minor), `fix`, `perf`, `refactor`, `revert` (patch) and breaking
-(major) commits release from `main`; `docs`, `test`, `build`, `ci`, `chore`
-and `deps` do not. The rule set is the commit-analyzer `releaseRules` in
+Release types come from the commit-analyzer `releaseRules` in
 [`.releaserc.json`](./.releaserc.json), identical in every chill.institute
 package repo; [`smoke.mjs`](./.github/release/smoke.mjs) fails when it drifts.
 
@@ -57,14 +55,9 @@ Gaps:
 
 ## Ownership
 
-- Cobra commands and orchestration: `internal/cli/`
-- Public procedure names and input validation: `pkg/chill/`
-- Local profiles and credentials: `pkg/config/`
-- API transport and error mapping: `pkg/rpc/`
-- Release lookup and binary replacement: `internal/update/`
-- Release asset checksums and names: `internal/releaseassets/`; npm and
-  Homebrew packaging from those assets: `scripts/`
-- Shared tasks and hook behavior: `mise.toml`
+Code placement follows [Architecture components](./docs/ARCHITECTURE.md#components).
+`pkg/` is the importable Go surface for sibling clients: it must not depend on
+`internal/`, and changes to it follow semantic versioning.
 
 [Architecture](./docs/ARCHITECTURE.md) · [Contributing](./CONTRIBUTING.md) ·
 [Security](./SECURITY.md)

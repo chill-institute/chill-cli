@@ -26,7 +26,8 @@ pre-push runs the canonical verification gate.
 
 ## Hosted Integration
 
-Live tests are opt-in and require an API URL and user token:
+Live tests are opt-in and require an API URL and user token, from the
+environment or an ignored `.env.local`:
 
 ```bash
 CHILLY_TEST_API_URL=https://api.chill.institute \
@@ -41,7 +42,5 @@ mise run test:integration
 - Update tests, examples, and `skills/chilly-cli/` with user-facing changes.
 - Explain compatibility or migration risk in the pull request.
 
-Merges to `main` are released from Conventional Commits. Automation creates the
-tag, immutable GitHub release, Homebrew formula, and npm packages. To recover
-an existing tag, dispatch `Main` with its `tag`; keep `dry_run` on to preview
-the repair.
+Merges to `main` release from Conventional Commits; see
+[Delivery](./docs/ARCHITECTURE.md#delivery) for automation and tag recovery.
