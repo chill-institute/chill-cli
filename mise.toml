@@ -1,6 +1,6 @@
 [tools]
 actionlint = "1.7.12"
-go = "1.27.2"
+go = "1.27.3"
 zizmor = "1.31.1"
 
 [env]
