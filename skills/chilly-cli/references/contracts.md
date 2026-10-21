@@ -1,7 +1,5 @@
 # Contracts Reference
 
-Command metadata is the runtime truth; prefer it over docs when they disagree.
-
 ## Discovery
 
 - Registry: `chilly schema --fields commands.id,procedures.id --output json`
@@ -17,7 +15,6 @@ aliases (`results.release_info.bit_depth`).
 
 ## Diagnostics
 
-- Everything: `chilly doctor --output json`
-- Narrow: `chilly doctor --fields auth.status,config.profile,config.api_base_url --output json`
-- Local config: `chilly settings show --fields profile,api_base_url,auth_token --output json`
+- Everything: `chilly doctor --output json`; narrow auth and host checks are
+  in [Auth](./auth.md)
 - Build: `chilly version --fields version,commit,build_date --output json`

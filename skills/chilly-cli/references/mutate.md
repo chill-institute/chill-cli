@@ -1,7 +1,6 @@
 # Mutate Reference
 
-Run each command with `--dry-run` first. Use `--json` or `--json @-` when you
-already know the exact request body.
+Use `--json` or `--json @-` when you already know the exact request body.
 
 ## Transfers
 

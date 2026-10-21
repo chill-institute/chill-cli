@@ -29,7 +29,7 @@ mise run verify
 
 | Change | Check | CI |
 | --- | --- | --- |
-| Go, docs, skill, workflows | `mise run verify`: format, lint, 85% coverage, govulncheck, actionlint, zizmor | [Verify](./.github/workflows/verify.yml), [Main](./.github/workflows/main.yml) |
+| Go, docs, skill, workflows | `mise run verify` ([`verify` task](./mise.toml)) | [Verify](./.github/workflows/verify.yml), [Main](./.github/workflows/main.yml) |
 | Command surface or output | `mise run smoke`, then `go run ./cmd/chilly <command> --help` and `--output json` | none |
 | Schema metadata | `mise run contracts:check` against `../chill-contracts` | Verify, Main, pinned tag |
 | Release rules | `npm ci --prefix .github/release --ignore-scripts && node .github/release/smoke.mjs` | Verify |

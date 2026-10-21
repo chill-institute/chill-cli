@@ -8,7 +8,7 @@ Start wide enough to find IDs, then rerun narrowly with `--fields`.
 - One indexer: `chilly search --query "dune" --indexer-id yts --fields results.title --output json`
 - Streamed: `chilly search --query "dune" --fields results.title,results.release_info.bit_depth --output ndjson`
 - `--indexer-id` is opaque; values with `/`, `?`, `#`, `%`, or `..` fail
-  locally. `INDEXER_STATUS_DEGRADED` means partly working.
+  locally.
 
 ## Catalog and Account
 

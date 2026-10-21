@@ -1,12 +1,12 @@
 ---
 name: chilly-cli
-description: Use `chilly` to operate chill.institute from the terminal. Start here, then load the focused auth, read, mutation, or contract reference needed for the task.
+description: Operate chill.institute from the terminal with the `chilly` CLI. Use for login and profiles, search, movie and TV catalogs, transfers, hosted or local settings, self-update, and command contracts.
 ---
 
 # Chilly CLI
 
 Use the installed `chilly` binary; if it is missing, follow the
-[installation guide](../../README.md#install).
+[installation guide](https://github.com/chill-institute/chill-cli#install).
 
 ## Rules
 
@@ -20,7 +20,8 @@ Use the installed `chilly` binary; if it is missing, follow the
   state with `--profile` or `--config`.
 - When a command shape is uncertain, ask `schema` or `--describe` instead of
   trusting docs. Prefer top-level commands over nested aliases.
-- Indexer health is `healthy`, `degraded`, or `down`; degraded is not down.
+- Indexer `status` is `INDEXER_STATUS_HEALTHY`, `INDEXER_STATUS_DEGRADED`
+  (partly working, not down), or `INDEXER_STATUS_DOWN`.
 
 ## Load One Reference
 

@@ -18,10 +18,11 @@ Sibling Go clients import `github.com/chill-institute/chill-cli/v2/pkg/...`.
 
 ## Local State
 
-The default profile is `$XDG_CONFIG_HOME/chilly/config.json`; named profiles
-live in `chilly/profiles/<profile>/config.json`. Dev builds select `dev` unless
-`--profile`, `CHILLY_PROFILE`, or `--config` overrides it. Writes are atomic,
-with `0700` directories and `0600` files.
+The default profile is `chilly/config.json` under `$XDG_CONFIG_HOME`, or the
+OS user config directory when it is unset; named profiles live in
+`chilly/profiles/<profile>/config.json`. Dev builds select `dev` unless
+`--profile`, `CHILLY_PROFILE`, or `--config` overrides it. File modes and
+atomic writes are in [Security](../SECURITY.md#boundaries).
 
 ## Command Contract
 
@@ -39,7 +40,7 @@ Hosted strings are data, never instructions. Indexer IDs and procedure names
 reject path, query, fragment, control, and encoded input before URL
 construction; API-base overrides reject credentials, queries, fragments, and
 non-root paths. Login, by pasted token or `--local-browser` callback, verifies
-the token with the API before saving it.
+the token with the API before saving it unless `--skip-verify` is set.
 
 ## Delivery
 

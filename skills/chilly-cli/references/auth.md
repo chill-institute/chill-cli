@@ -18,7 +18,6 @@ accepted only for loopback development.
 
 ## Host and Profile
 
-- Host: `chilly settings get api-base-url --fields value --output json`
 - Config path: `chilly settings path --fields path --output json`
 - Profile and host: `chilly settings show --fields profile,api_base_url --output json`
 - Isolated profile path: `chilly settings path --profile dev --output json`
