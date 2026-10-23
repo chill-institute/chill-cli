@@ -380,6 +380,46 @@ func TestNormalizeJSONSupportsNDJSONArrays(t *testing.T) {
 	}
 }
 
+func TestNormalizeJSONEscapesTerminalControlRunes(t *testing.T) {
+	t.Parallel()
+
+	// A hosted title carrying a C1 OSC 52 clipboard write, NEL, bidi and
+	// zero-width format characters, and an astral format character.
+	raw := []byte(`{"results":[{"title":"x\u009d52;c;cA==\u009cy\u0085\u202e\u200b\ud834\udd73 Dune — 日本語"}]}`)
+	const escapedTitle = `x\u009d52;c;cA==\u009cy\u0085\u202e\u200b\ud834\udd73 Dune — 日本語`
+
+	for _, mode := range []string{outputJSON, outputNDJSON, outputPretty} {
+		for _, selection := range []*fieldSelection{nil, mustFieldSelection(t, "results.title")} {
+			normalized, err := normalizeJSON(raw, mode, selection)
+			if err != nil {
+				t.Fatalf("normalizeJSON(%s) error = %v", mode, err)
+			}
+			if strings.IndexFunc(string(normalized), isUnsafeNonASCIIRune) >= 0 {
+				t.Fatalf("normalizeJSON(%s) = %q, want no raw unsafe runes", mode, normalized)
+			}
+			if !strings.Contains(string(normalized), escapedTitle) {
+				t.Fatalf("normalizeJSON(%s) = %q, want escaped title %q", mode, normalized, escapedTitle)
+			}
+		}
+	}
+
+	normalized, err := normalizeJSON(raw, outputJSON, nil)
+	if err != nil {
+		t.Fatalf("normalizeJSON() error = %v", err)
+	}
+	var decoded struct {
+		Results []struct {
+			Title string `json:"title"`
+		} `json:"results"`
+	}
+	if err := json.Unmarshal(normalized, &decoded); err != nil {
+		t.Fatalf("json.Unmarshal() error = %v", err)
+	}
+	if got, want := decoded.Results[0].Title, "x\u009d52;c;cA==\u009cy\u0085\u202e\u200b\U0001d173 Dune — 日本語"; got != want {
+		t.Fatalf("decoded title = %q, want the original %q", got, want)
+	}
+}
+
 func TestNormalizeJSONSupportsEmptyNDJSONArrays(t *testing.T) {
 	t.Parallel()
 

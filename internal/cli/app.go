@@ -390,13 +390,20 @@ func normalizeJSON(raw []byte, mode string, selection *fieldSelection) ([]byte, 
 	}
 	value = selection.apply(value)
 
-	if mode == outputJSON {
-		return json.Marshal(value)
+	var encoded []byte
+	var err error
+	switch mode {
+	case outputJSON:
+		encoded, err = json.Marshal(value)
+	case outputNDJSON:
+		encoded, err = marshalNDJSON(value)
+	default:
+		encoded, err = json.MarshalIndent(value, "", "  ")
 	}
-	if mode == outputNDJSON {
-		return marshalNDJSON(value)
+	if err != nil {
+		return nil, err
 	}
-	return json.MarshalIndent(value, "", "  ")
+	return escapeUnsafeJSONRunes(encoded), nil
 }
 
 func marshalNDJSON(value any) ([]byte, error) {
