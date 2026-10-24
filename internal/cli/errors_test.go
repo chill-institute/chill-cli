@@ -114,3 +114,29 @@ func TestWriteErrorPreservesControlTextInJSONData(t *testing.T) {
 		t.Fatalf("message = %#v, want original semantic text", payload["message"])
 	}
 }
+
+func TestWriteErrorEscapesC1AndFormatRunesInJSON(t *testing.T) {
+	t.Parallel()
+
+	stderr := &bytes.Buffer{}
+	app := &appContext{
+		opts:   &appOptions{output: outputJSON},
+		stderr: stderr,
+	}
+
+	const original = "upstream\u009b2Jspoofed\u202eevil"
+	writeError(app, rpc.APIError{Message: original, StatusCode: 500})
+	if strings.ContainsAny(stderr.String(), "\u009b\u202e") {
+		t.Fatalf("json stderr contains raw C1 or format rune: %q", stderr.String())
+	}
+	if !strings.Contains(stderr.String(), `upstream\u009b2Jspoofed\u202eevil`) {
+		t.Fatalf("json stderr = %q, want escaped runes", stderr.String())
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(stderr.Bytes(), &payload); err != nil {
+		t.Fatalf("json.Unmarshal() error = %v", err)
+	}
+	if message, _ := payload["message"].(string); !strings.Contains(message, original) {
+		t.Fatalf("message = %#v, want original semantic text", payload["message"])
+	}
+}
