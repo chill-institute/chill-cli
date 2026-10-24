@@ -168,7 +168,7 @@ func writeError(app *appContext, err error) {
 			payload["status_code"] = classified.StatusCode
 		}
 		if encoded, marshalErr := json.Marshal(payload); marshalErr == nil {
-			_, _ = fmt.Fprintln(app.stderr, string(encoded))
+			_, _ = fmt.Fprintln(app.stderr, string(escapeUnsafeJSONRunes(encoded)))
 			return
 		}
 	}
