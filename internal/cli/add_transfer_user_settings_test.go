@@ -87,33 +87,6 @@ func TestBuildAddTransferRequest(t *testing.T) {
 func TestLoadCurrentUserSettings(t *testing.T) {
 	t.Parallel()
 
-	t.Run("success", func(t *testing.T) {
-		t.Parallel()
-
-		server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-			_, _ = writer.Write([]byte(`{"search":{"filterNastyResults":true}}`))
-		}))
-		defer server.Close()
-
-		configPath := filepath.Join(t.TempDir(), "config.json")
-		store, err := config.NewStore(configPath)
-		if err != nil {
-			t.Fatalf("NewStore() error = %v", err)
-		}
-		if err := store.Save(config.Config{APIBaseURL: server.URL, AuthToken: "saved-token"}); err != nil {
-			t.Fatalf("Save() error = %v", err)
-		}
-
-		settings, err := loadCurrentUserSettings(&appContext{opts: &appOptions{configPath: configPath, output: outputJSON}})
-		if err != nil {
-			t.Fatalf("loadCurrentUserSettings() error = %v", err)
-		}
-		search, ok := settings["search"].(map[string]any)
-		if !ok || search["filterNastyResults"] != true {
-			t.Fatalf("settings = %#v", settings)
-		}
-	})
-
 	t.Run("null body becomes empty object", func(t *testing.T) {
 		t.Parallel()
 

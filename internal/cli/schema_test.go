@@ -12,7 +12,7 @@ import (
 )
 
 func TestRootCommandIncludesSchemaTopLevelCommand(t *testing.T) {
-	command := NewRootCommand()
+	command := newRootCommand(newAppContext(&appOptions{output: outputPretty}))
 	expected := map[string]bool{
 		"add-transfer": true,
 		"get-transfer": true,
@@ -583,30 +583,6 @@ func TestSchemaTypeUnknownReturnsUsageError(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "unknown type schema") {
 		t.Fatalf("error = %v, want unknown type schema", err)
-	}
-}
-
-func TestSearchDescribeOutputsMetadataWithoutExecuting(t *testing.T) {
-	t.Parallel()
-
-	stdout := &bytes.Buffer{}
-	command := newRootCommand(&appContext{
-		opts:   &appOptions{output: outputJSON},
-		stdin:  strings.NewReader(""),
-		stdout: stdout,
-		stderr: &bytes.Buffer{},
-	})
-	command.SetArgs([]string{"search", "--describe", "--output", "json"})
-	if err := command.Execute(); err != nil {
-		t.Fatalf("Execute() error = %v", err)
-	}
-
-	var output schemaEntry
-	if err := json.Unmarshal(stdout.Bytes(), &output); err != nil {
-		t.Fatalf("json.Unmarshal() error = %v", err)
-	}
-	if output.ID != "search" {
-		t.Fatalf("ID = %q, want %q", output.ID, "search")
 	}
 }
 

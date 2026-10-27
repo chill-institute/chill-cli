@@ -3,18 +3,8 @@
 `chilly` turns Cobra commands into validated `POST /v4/{procedure}` calls to the
 hosted `chill.institute` API.
 
-## Components
-
-| Path | Owns |
-| --- | --- |
-| `internal/cli/` | Commands, metadata, rendering, orchestration (kept flat) |
-| `pkg/chill/` | Procedure names, input validation, settings patches, request builders |
-| `pkg/config/` | Profiles, API URL, token persistence |
-| `pkg/rpc/` | Transport, client identity headers, API errors |
-| `internal/update/`, `internal/releaseassets/` | Self-update and `checksums.txt` verification |
-| `scripts/npm-package/`, `scripts/homebrew-formula/` | Packages built from published release assets |
-
-Sibling Go clients import `github.com/chill-institute/chill-cli/v2/pkg/...`.
+Sibling Go clients import `github.com/chill-institute/chill-cli/v2/pkg/...`;
+`internal/` stays private to this module.
 
 ## Local State
 
@@ -45,17 +35,9 @@ the token with the API before saving it unless `--skip-verify` is set.
 ## Delivery
 
 [Main](../.github/workflows/main.yml) and
-[`_release.yml`](../.github/workflows/_release.yml) release after verification
-on `main`: semantic-release tags, GoReleaser uploads reproducible archives to a
-draft, the workflow attests them and checks digests, then publishes an
-immutable release. npm packages and the Homebrew formula are built from the
-published assets only after checksums and attestations verify.
-
-Recovery dispatches Main with a `tag` and never rebuilds a published release:
-it publishes missing npm versions, fixes a differing formula, or resumes a
-draft. A tag below the latest release goes to npm `backfill` (prereleases to
-`next`) and moves neither the formula nor GitHub's Latest. Every run fails when
-an earlier tag has no published release.
+[`_release.yml`](../.github/workflows/_release.yml) own the release. Recover a
+release by dispatching Main with its `tag`; recovery never rebuilds a published
+release.
 
 `scripts/homebrew-formula` writes the formula because GoReleaser cannot write
 the tap after publication or sign tap commits. It stays a formula, not a cask:

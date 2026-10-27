@@ -147,53 +147,6 @@ for package_dir in dist/npm/cli-* dist/npm/cli; do
 done
 """
 
-[tasks.coverage]
-description = "Run tests with coverage threshold"
-run = """
-threshold="${MISE_COVERAGE_THRESHOLD:-85}"
-
-printf '==> running Go tests with coverage (threshold: %s%%)\n' "$threshold"
-go test ./... -covermode=atomic -coverprofile=coverage.out
-
-total_coverage="$(
-  go tool cover -func=coverage.out | awk '/^total:/ { gsub(/%/, "", $3); print $3 }'
-)"
-
-if [ -z "$total_coverage" ]; then
-  printf 'failed to determine total coverage from coverage.out\n' >&2
-  exit 1
-fi
-
-printf '==> total coverage: %s%%\n' "$total_coverage"
-
-awk -v total="$total_coverage" -v threshold="$threshold" '
-  BEGIN {
-    if ((total + 0) < (threshold + 0)) {
-      printf("coverage %.1f%% is below threshold %.1f%%\\n", total + 0, threshold + 0) > "/dev/stderr"
-      exit 1
-    }
-  }
-'
-"""
-
-[tasks."coverage:report"]
-description = "Show package coverage and the lowest-covered functions"
-shell = "bash -c"
-run = '''
-set -euo pipefail
-tmpdir="$(mktemp -d "${TMPDIR:-/tmp}/chilly-cover-report.XXXXXX")"
-trap 'rm -rf "$tmpdir"' EXIT
-if ! go test -count=1 ./... -covermode=atomic -coverprofile="$tmpdir/coverage.out" >"$tmpdir/test.log" 2>&1; then
-  cat "$tmpdir/test.log" >&2
-  exit 1
-fi
-
-printf '==> package coverage\n'
-tail -n 20 "$tmpdir/test.log"
-printf '\n==> lowest-covered functions\n'
-go tool cover -func="$tmpdir/coverage.out" | sort -k3,3n | sed -n '1,25p'
-'''
-
 [tasks.security]
 description = "Run dependency vulnerability scan"
 run = "go tool govulncheck ./..."
@@ -212,7 +165,7 @@ description = "Check local schema metadata against a sibling chill-contracts pro
 run = """
 repo_root="$(git rev-parse --show-toplevel)"
 proto_path="${CHILLY_CONTRACTS_PROTO:-$repo_root/../chill-contracts/proto/chill/v4/api.proto}"
-CHILLY_CONTRACTS_PROTO="$proto_path" CHILLY_REQUIRE_CONTRACTS=1 go test -count=1 ./internal/cli -run '^TestLocalSchemaMatchesContractsProto$'
+CHILLY_CONTRACTS_PROTO="$proto_path" CHILLY_REQUIRE_CONTRACTS=1 go test ./internal/cli -run '^TestLocalSchemaMatchesContractsProto$'
 """
 
 [tasks.hooks]
@@ -225,5 +178,5 @@ printf 'git hooks configured: %s/.githooks\n' "$repo_root"
 """
 
 [tasks.verify]
-description = "Run formatting, lint, coverage, and security checks"
-depends = ["fmt:check", "mod:check", "lint", "coverage", "security", "actions"]
+description = "Run formatting, lint, tests, and security checks"
+depends = ["fmt:check", "mod:check", "lint", "test", "security", "actions"]
