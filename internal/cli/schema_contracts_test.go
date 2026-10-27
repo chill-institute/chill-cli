@@ -3,7 +3,6 @@ package cli
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
@@ -20,12 +19,11 @@ type protoField struct {
 func TestLocalSchemaMatchesContractsProto(t *testing.T) {
 	t.Parallel()
 
+	// The proto lives outside this module, where Go's test cache does not
+	// look, so only `mise run contracts:check` (with -count=1) names it.
 	path := strings.TrimSpace(os.Getenv("CHILLY_CONTRACTS_PROTO"))
 	if path == "" {
-		path = firstExistingPath(
-			"../chill-contracts/proto/chill/v4/api.proto",
-			"../../../chill-contracts/proto/chill/v4/api.proto",
-		)
+		t.Skip("CHILLY_CONTRACTS_PROTO is unset; run mise run contracts:check")
 	}
 
 	payload, err := os.ReadFile(path)
@@ -97,19 +95,6 @@ func isPrimitiveSchemaType(typeID string) bool {
 	default:
 		return false
 	}
-}
-
-func firstExistingPath(paths ...string) string {
-	for _, path := range paths {
-		cleaned := filepath.Clean(path)
-		if _, err := os.Stat(cleaned); err == nil {
-			return cleaned
-		}
-	}
-	if len(paths) == 0 {
-		return ""
-	}
-	return filepath.Clean(paths[0])
 }
 
 func assertTypeMatchesProtoMessage(t *testing.T, typeID string, protoFields []protoField) {
