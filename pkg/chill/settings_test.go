@@ -12,6 +12,8 @@ func TestUserSettingsPatchNormalizesAliasesAndValues(t *testing.T) {
 		want                    any
 	}{
 		{"filter-nasty-results", "true", "search.filterNastyResults", true},
+		{"exact-search", "true", "search.exactSearch", true},
+		{"search.exact-search", "false", "search.exactSearch", false},
 		{"search.sort-by", "Uploaded-At", "search.sortBy", "SORT_BY_UPLOADED_AT"},
 		{"sort-by", "title", "search.sortBy", "SORT_BY_TITLE"},
 		{"tv-shows-source", "paramount plus", "catalog.tvShowsSource", "TV_SHOWS_SOURCE_PARAMOUNT_PLUS"},
@@ -44,7 +46,7 @@ func TestUserSettingsPatchNormalizesAliasesAndValues(t *testing.T) {
 		t.Fatal("UserSettingsFields exposes the shared catalog")
 	}
 	for _, path := range []string{
-		"search.filterNastyResults", "search.filterResultsWithNoSeeders", "search.rememberQuickFilters",
+		"search.filterNastyResults", "search.filterResultsWithNoSeeders", "search.rememberQuickFilters", "search.exactSearch",
 		"search.sortBy", "search.sortDirection", "search.searchResultDisplayBehavior", "search.searchResultTitleBehavior",
 		"catalog.moviesSource", "catalog.tvShowsSource", "catalog.sort", "download.folderId",
 	} {

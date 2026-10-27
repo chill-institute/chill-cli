@@ -1010,6 +1010,7 @@ var typeSchemaRegistry = map[string]schemaType{
 		Fields: []schemaField{
 			repeatedSchemaField("codec_filters", "string"),
 			repeatedSchemaField("disabled_indexer_ids", "string"),
+			optionalSchemaField("exact_search", "boolean"),
 			schemaFieldFor("filter_nasty_results", "boolean"),
 			schemaFieldFor("filter_results_with_no_seeders", "boolean"),
 			repeatedSchemaField("other_filters", "string"),
