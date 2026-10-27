@@ -8,7 +8,7 @@ import (
 func TestMainInvokesExitWithRunResult(t *testing.T) {
 	originalExit := exit
 	originalArgs := os.Args
-	os.Args = []string{"chilly", "--help"}
+	os.Args = []string{"chilly", "no-such-command"}
 
 	called := -1
 	exit = func(code int) {
@@ -21,7 +21,8 @@ func TestMainInvokesExitWithRunResult(t *testing.T) {
 
 	main()
 
-	if called != 0 {
-		t.Fatalf("exit code = %d", called)
+	// An unknown command is a usage error, so main must forward os.Args and its exit code.
+	if called != 2 {
+		t.Fatalf("exit code = %d, want 2", called)
 	}
 }

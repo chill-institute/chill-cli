@@ -8,17 +8,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var (
-	resolveConfigProfile     = config.ResolveProfile
-	resolveDefaultConfigPath = config.DefaultPath
-)
-
-func NewRootCommand() *cobra.Command {
-	opts := &appOptions{output: outputPretty}
-	app := newAppContext(opts)
-	return newRootCommand(app)
-}
-
 func Run(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) int {
 	opts := &appOptions{output: outputPretty}
 	app := newAppContext(opts)
@@ -58,19 +47,19 @@ chilly schema command search --output json
 		CompletionOptions: cobra.CompletionOptions{DisableDefaultCmd: true},
 		PersistentPreRunE: func(cmd *cobra.Command, _ []string) error {
 			if strings.TrimSpace(opts.configPath) == "" {
-				resolvedProfile, err := resolveConfigProfile(opts.profile, currentBuildInfo().IsDev())
+				resolvedProfile, err := config.ResolveProfile(opts.profile, currentBuildInfo().IsDev())
 				if err != nil {
 					return usageError("invalid_profile", "invalid --profile %q", opts.profile)
 				}
 				opts.profile = resolvedProfile
 
-				defaultPath, err := resolveDefaultConfigPath(resolvedProfile)
+				defaultPath, err := config.DefaultPath(resolvedProfile)
 				if err != nil {
 					return wrapInternalError("resolve_config_path_failed", "resolve config path", err)
 				}
 				opts.configPath = defaultPath
 			} else {
-				resolvedProfile, err := resolveConfigProfile(opts.profile, currentBuildInfo().IsDev())
+				resolvedProfile, err := config.ResolveProfile(opts.profile, currentBuildInfo().IsDev())
 				if err != nil {
 					return usageError("invalid_profile", "invalid --profile %q", opts.profile)
 				}

@@ -105,7 +105,7 @@ func (app *appContext) configStore() (*config.Store, error) {
 		if err != nil {
 			return nil, err
 		}
-		defaultPath, err := resolveDefaultConfigPath(activeProfile)
+		defaultPath, err := config.DefaultPath(activeProfile)
 		if err != nil {
 			return nil, wrapInternalError("config_path_resolve_failed", "resolve config path", err)
 		}
@@ -120,7 +120,7 @@ func (app *appContext) configStore() (*config.Store, error) {
 }
 
 func (app *appContext) activeProfile() (string, error) {
-	profile, err := resolveConfigProfile(app.opts.profile, currentBuildInfo().IsDev())
+	profile, err := config.ResolveProfile(app.opts.profile, currentBuildInfo().IsDev())
 	if err != nil {
 		return "", wrapUsageError("invalid_profile", err)
 	}

@@ -46,6 +46,7 @@ func TestFindAsset(t *testing.T) {
 	release := Release{
 		TagName: "v1.2.3",
 		Assets: []ReleaseAsset{
+			{Name: "chilly_1.2.3_linux_arm64.tar.gz", BrowserDownloadURL: "https://example.invalid/linux.tgz"},
 			{Name: "chilly_1.2.3_darwin_arm64.tar.gz", BrowserDownloadURL: "https://example.invalid/chilly.tgz"},
 		},
 	}
@@ -54,8 +55,8 @@ func TestFindAsset(t *testing.T) {
 	if err != nil {
 		t.Fatalf("FindAsset() error = %v", err)
 	}
-	if asset.BrowserDownloadURL == "" {
-		t.Fatal("expected asset URL")
+	if asset.BrowserDownloadURL != "https://example.invalid/chilly.tgz" {
+		t.Fatalf("asset = %#v, want the darwin arm64 archive", asset)
 	}
 }
 
@@ -65,6 +66,7 @@ func TestFindChecksumAsset(t *testing.T) {
 	release := Release{
 		TagName: "v1.2.3",
 		Assets: []ReleaseAsset{
+			{Name: "chilly_1.2.3_darwin_arm64.tar.gz", BrowserDownloadURL: "https://example.invalid/chilly.tgz"},
 			{Name: "checksums.txt", BrowserDownloadURL: "https://example.invalid/checksums.txt"},
 		},
 	}
@@ -73,8 +75,8 @@ func TestFindChecksumAsset(t *testing.T) {
 	if err != nil {
 		t.Fatalf("FindChecksumAsset() error = %v", err)
 	}
-	if asset.BrowserDownloadURL == "" {
-		t.Fatal("expected checksum asset URL")
+	if asset.BrowserDownloadURL != "https://example.invalid/checksums.txt" {
+		t.Fatalf("asset = %#v, want checksums.txt", asset)
 	}
 }
 
@@ -104,9 +106,10 @@ func TestVerifyAssetChecksumMismatch(t *testing.T) {
 	t.Parallel()
 
 	payload := []byte("archive-bytes")
-	checksums := []byte("deadbeef  chilly_1.2.3_darwin_arm64.tar.gz\n")
-	if err := VerifyAssetChecksum("chilly_1.2.3_darwin_arm64.tar.gz", payload, checksums); err == nil {
-		t.Fatal("VerifyAssetChecksum() error = nil, want mismatch")
+	checksums := []byte("0000000000000000000000000000000000000000000000000000000000000000  chilly_1.2.3_darwin_arm64.tar.gz\n")
+	err := VerifyAssetChecksum("chilly_1.2.3_darwin_arm64.tar.gz", payload, checksums)
+	if err == nil || !strings.Contains(err.Error(), "checksum mismatch") {
+		t.Fatalf("VerifyAssetChecksum() error = %v, want checksum mismatch", err)
 	}
 }
 

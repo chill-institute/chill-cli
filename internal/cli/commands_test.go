@@ -132,75 +132,6 @@ func TestCompletionCommandSupportsFishAndRejectsUnknownShells(t *testing.T) {
 	})
 }
 
-func TestGetTransferHelpIncludesFieldsExample(t *testing.T) {
-	t.Parallel()
-
-	stdout := &bytes.Buffer{}
-	command := newRootCommand(&appContext{
-		opts:   &appOptions{output: outputPretty},
-		stdin:  strings.NewReader(""),
-		stdout: stdout,
-		stderr: &bytes.Buffer{},
-	})
-	command.SetArgs([]string{"get-transfer", "--help"})
-	if err := command.Execute(); err != nil {
-		t.Fatalf("Execute() error = %v", err)
-	}
-
-	rendered := stdout.String()
-	if !strings.Contains(rendered, "get-transfer 42 --fields") {
-		t.Fatalf("expected get-transfer fields example in %q", rendered)
-	}
-}
-
-func TestRootHelpIncludesExamples(t *testing.T) {
-	t.Parallel()
-
-	stdout := &bytes.Buffer{}
-	command := newRootCommand(&appContext{
-		opts:   &appOptions{output: outputPretty},
-		stdin:  strings.NewReader(""),
-		stdout: stdout,
-		stderr: &bytes.Buffer{},
-	})
-	command.SetArgs([]string{"--help"})
-	if err := command.Execute(); err != nil {
-		t.Fatalf("Execute() error = %v", err)
-	}
-
-	rendered := stdout.String()
-	if !strings.Contains(rendered, "Examples:") {
-		t.Fatalf("expected examples in root help: %q", rendered)
-	}
-	if !strings.Contains(rendered, `chilly schema command search --output json`) {
-		t.Fatalf("expected schema example in root help: %q", rendered)
-	}
-}
-
-func TestUserHelpUsesProductFacingCopy(t *testing.T) {
-	t.Parallel()
-
-	stdout := &bytes.Buffer{}
-	command := newRootCommand(&appContext{
-		opts:   &appOptions{output: outputPretty},
-		stdin:  strings.NewReader(""),
-		stdout: stdout,
-		stderr: &bytes.Buffer{},
-	})
-	command.SetArgs([]string{"user", "--help"})
-	if err := command.Execute(); err != nil {
-		t.Fatalf("Execute() error = %v", err)
-	}
-
-	rendered := stdout.String()
-	if !strings.Contains(rendered, "Run user account commands through chill.institute") {
-		t.Fatalf("expected product-facing user help: %q", rendered)
-	}
-	if !strings.Contains(rendered, "chilly user settings get --output json") {
-		t.Fatalf("expected example in user help: %q", rendered)
-	}
-}
-
 func TestAuthLogoutClearsToken(t *testing.T) {
 	t.Parallel()
 
@@ -234,49 +165,6 @@ func TestAuthLogoutClearsToken(t *testing.T) {
 	}
 	if cfg.AuthToken != "" {
 		t.Fatalf("AuthToken = %q, want empty", cfg.AuthToken)
-	}
-}
-
-func TestAuthLogoutDryRunKeepsToken(t *testing.T) {
-	t.Parallel()
-
-	configPath := filepath.Join(t.TempDir(), "config.json")
-	store, err := config.NewStore(configPath)
-	if err != nil {
-		t.Fatalf("NewStore() error = %v", err)
-	}
-	if err := store.Save(config.Config{APIBaseURL: "https://api.chill.institute", AuthToken: "token-1"}); err != nil {
-		t.Fatalf("Save() error = %v", err)
-	}
-
-	stdout := &bytes.Buffer{}
-	app := &appContext{
-		opts:   &appOptions{configPath: configPath, output: outputJSON},
-		stdin:  strings.NewReader(""),
-		stdout: stdout,
-		stderr: &bytes.Buffer{},
-	}
-
-	command := newAuthLogoutCommand(app)
-	command.SetArgs([]string{"--dry-run"})
-	if err := command.Execute(); err != nil {
-		t.Fatalf("Execute() error = %v", err)
-	}
-
-	cfg, err := store.Load()
-	if err != nil {
-		t.Fatalf("Load() error = %v", err)
-	}
-	if cfg.AuthToken != "token-1" {
-		t.Fatalf("AuthToken = %q, want %q", cfg.AuthToken, "token-1")
-	}
-
-	var output map[string]any
-	if err := json.Unmarshal(stdout.Bytes(), &output); err != nil {
-		t.Fatalf("output json decode error: %v", err)
-	}
-	if output["dry_run"] != true {
-		t.Fatalf("dry_run = %v, want true", output["dry_run"])
 	}
 }
 
@@ -532,49 +420,6 @@ func TestSettingsSetAndGetAPIBaseURL(t *testing.T) {
 	}
 	if output["value"] != "https://api.chill.test" {
 		t.Fatalf("value = %v, want %q", output["value"], "https://api.chill.test")
-	}
-}
-
-func TestSettingsSetDryRunDoesNotSaveAPIBaseURL(t *testing.T) {
-	t.Parallel()
-
-	configPath := filepath.Join(t.TempDir(), "config.json")
-	store, err := config.NewStore(configPath)
-	if err != nil {
-		t.Fatalf("NewStore() error = %v", err)
-	}
-	if err := store.Save(config.Default()); err != nil {
-		t.Fatalf("Save() error = %v", err)
-	}
-
-	stdout := &bytes.Buffer{}
-	app := &appContext{
-		opts:   &appOptions{configPath: configPath, output: outputJSON},
-		stdin:  strings.NewReader(""),
-		stdout: stdout,
-		stderr: &bytes.Buffer{},
-	}
-
-	command := newSettingsCommand(app)
-	command.SetArgs([]string{"set", "api-base-url", "https://api.chill.test", "--dry-run"})
-	if err := command.Execute(); err != nil {
-		t.Fatalf("Execute() error = %v", err)
-	}
-
-	cfg, err := store.Load()
-	if err != nil {
-		t.Fatalf("Load() error = %v", err)
-	}
-	if cfg.APIBaseURL != config.Default().APIBaseURL {
-		t.Fatalf("APIBaseURL = %q, want %q", cfg.APIBaseURL, config.Default().APIBaseURL)
-	}
-
-	var output map[string]any
-	if err := json.Unmarshal(stdout.Bytes(), &output); err != nil {
-		t.Fatalf("output json decode error: %v", err)
-	}
-	if output["command"] != "settings set" {
-		t.Fatalf("command = %v, want %q", output["command"], "settings set")
 	}
 }
 

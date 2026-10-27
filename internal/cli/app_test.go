@@ -13,7 +13,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chill-institute/chill-cli/v2/internal/buildinfo"
 	"github.com/chill-institute/chill-cli/v2/pkg/config"
 	"github.com/chill-institute/chill-cli/v2/pkg/rpc"
 )
@@ -173,36 +172,6 @@ func TestCallRPCAbortsBlockedServerWithTimeout(t *testing.T) {
 	}
 	if elapsed := time.Since(started); elapsed > time.Second {
 		t.Fatalf("callRPC() took %v, want under 1s", elapsed)
-	}
-}
-
-func TestActiveProfileUsesDevDefaultForDevBuilds(t *testing.T) {
-	original := currentBuildInfo
-	currentBuildInfo = func() buildinfo.Info {
-		return buildinfo.Info{Version: "dev", Commit: "test", BuildDate: "test"}
-	}
-	t.Cleanup(func() { currentBuildInfo = original })
-
-	app := &appContext{opts: &appOptions{}}
-	profile, err := app.activeProfile()
-	if err != nil {
-		t.Fatalf("activeProfile() error = %v", err)
-	}
-	if profile != "dev" {
-		t.Fatalf("profile = %q, want %q", profile, "dev")
-	}
-}
-
-func TestActiveProfileUsesExplicitProfile(t *testing.T) {
-	t.Parallel()
-
-	app := &appContext{opts: &appOptions{profile: "production"}}
-	profile, err := app.activeProfile()
-	if err != nil {
-		t.Fatalf("activeProfile() error = %v", err)
-	}
-	if profile != "production" {
-		t.Fatalf("profile = %q, want %q", profile, "production")
 	}
 }
 

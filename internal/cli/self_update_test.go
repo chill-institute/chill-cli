@@ -191,7 +191,7 @@ func TestSelfUpdateRejectsChecksumMismatch(t *testing.T) {
 				},
 			},
 			downloads: map[string][]byte{
-				checksumURL: []byte("deadbeef  chilly_1.2.0_darwin_arm64.tar.gz\n"),
+				checksumURL: []byte("0000000000000000000000000000000000000000000000000000000000000000  chilly_1.2.0_darwin_arm64.tar.gz\n"),
 				assetURL:    archive,
 			},
 		}
@@ -216,7 +216,8 @@ func TestSelfUpdateRejectsChecksumMismatch(t *testing.T) {
 	if err == nil {
 		t.Fatal("Execute() error = nil, want checksum failure")
 	}
-	if !strings.Contains(err.Error(), "verify release asset checksum") {
+	var cliErr *cliError
+	if !errors.As(err, &cliErr) || cliErr.Code != "verify_release_asset_failed" || cliErr.Err == nil || !strings.Contains(cliErr.Err.Error(), "checksum mismatch") {
 		t.Fatalf("error = %v", err)
 	}
 
