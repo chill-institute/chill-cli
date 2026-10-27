@@ -1741,7 +1741,7 @@ func TestUserSettingsSetPatchMergesWithCurrentSettings(t *testing.T) {
 		requestCount++
 		switch request.URL.Path {
 		case "/v4/chill.v4.UserService/GetUserSettings":
-			_, _ = writer.Write([]byte(`{"search":{"filterNastyResults":false,"sortBy":"SORT_BY_SEEDERS","sortDirection":"SORT_DIRECTION_DESC"}}`))
+			_, _ = writer.Write([]byte(`{"search":{"filterNastyResults":false,"exactSearch":true,"sortBy":"SORT_BY_SEEDERS","sortDirection":"SORT_DIRECTION_DESC"}}`))
 		case "/v4/chill.v4.UserService/SaveUserSettings":
 			var payload map[string]any
 			if err := json.NewDecoder(request.Body).Decode(&payload); err != nil {
@@ -1763,6 +1763,9 @@ func TestUserSettingsSetPatchMergesWithCurrentSettings(t *testing.T) {
 			}
 			if search["sortDirection"] != "SORT_DIRECTION_DESC" {
 				t.Fatalf("sortDirection = %v, want %q", search["sortDirection"], "SORT_DIRECTION_DESC")
+			}
+			if search["exactSearch"] != true {
+				t.Fatalf("exactSearch = %v, want true", search["exactSearch"])
 			}
 			_, _ = writer.Write([]byte(`{"search":{"filterNastyResults":true,"sortBy":"SORT_BY_SEEDERS","sortDirection":"SORT_DIRECTION_DESC"}}`))
 		default:
