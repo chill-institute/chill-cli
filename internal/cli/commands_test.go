@@ -168,49 +168,6 @@ func TestAuthLogoutClearsToken(t *testing.T) {
 	}
 }
 
-func TestAuthLogoutDryRunKeepsToken(t *testing.T) {
-	t.Parallel()
-
-	configPath := filepath.Join(t.TempDir(), "config.json")
-	store, err := config.NewStore(configPath)
-	if err != nil {
-		t.Fatalf("NewStore() error = %v", err)
-	}
-	if err := store.Save(config.Config{APIBaseURL: "https://api.chill.institute", AuthToken: "token-1"}); err != nil {
-		t.Fatalf("Save() error = %v", err)
-	}
-
-	stdout := &bytes.Buffer{}
-	app := &appContext{
-		opts:   &appOptions{configPath: configPath, output: outputJSON},
-		stdin:  strings.NewReader(""),
-		stdout: stdout,
-		stderr: &bytes.Buffer{},
-	}
-
-	command := newAuthLogoutCommand(app)
-	command.SetArgs([]string{"--dry-run"})
-	if err := command.Execute(); err != nil {
-		t.Fatalf("Execute() error = %v", err)
-	}
-
-	cfg, err := store.Load()
-	if err != nil {
-		t.Fatalf("Load() error = %v", err)
-	}
-	if cfg.AuthToken != "token-1" {
-		t.Fatalf("AuthToken = %q, want %q", cfg.AuthToken, "token-1")
-	}
-
-	var output map[string]any
-	if err := json.Unmarshal(stdout.Bytes(), &output); err != nil {
-		t.Fatalf("output json decode error: %v", err)
-	}
-	if output["dry_run"] != true {
-		t.Fatalf("dry_run = %v, want true", output["dry_run"])
-	}
-}
-
 func TestSearchCommandUsesStoredToken(t *testing.T) {
 	t.Parallel()
 
@@ -463,49 +420,6 @@ func TestSettingsSetAndGetAPIBaseURL(t *testing.T) {
 	}
 	if output["value"] != "https://api.chill.test" {
 		t.Fatalf("value = %v, want %q", output["value"], "https://api.chill.test")
-	}
-}
-
-func TestSettingsSetDryRunDoesNotSaveAPIBaseURL(t *testing.T) {
-	t.Parallel()
-
-	configPath := filepath.Join(t.TempDir(), "config.json")
-	store, err := config.NewStore(configPath)
-	if err != nil {
-		t.Fatalf("NewStore() error = %v", err)
-	}
-	if err := store.Save(config.Default()); err != nil {
-		t.Fatalf("Save() error = %v", err)
-	}
-
-	stdout := &bytes.Buffer{}
-	app := &appContext{
-		opts:   &appOptions{configPath: configPath, output: outputJSON},
-		stdin:  strings.NewReader(""),
-		stdout: stdout,
-		stderr: &bytes.Buffer{},
-	}
-
-	command := newSettingsCommand(app)
-	command.SetArgs([]string{"set", "api-base-url", "https://api.chill.test", "--dry-run"})
-	if err := command.Execute(); err != nil {
-		t.Fatalf("Execute() error = %v", err)
-	}
-
-	cfg, err := store.Load()
-	if err != nil {
-		t.Fatalf("Load() error = %v", err)
-	}
-	if cfg.APIBaseURL != config.Default().APIBaseURL {
-		t.Fatalf("APIBaseURL = %q, want %q", cfg.APIBaseURL, config.Default().APIBaseURL)
-	}
-
-	var output map[string]any
-	if err := json.Unmarshal(stdout.Bytes(), &output); err != nil {
-		t.Fatalf("output json decode error: %v", err)
-	}
-	if output["command"] != "settings set" {
-		t.Fatalf("command = %v, want %q", output["command"], "settings set")
 	}
 }
 

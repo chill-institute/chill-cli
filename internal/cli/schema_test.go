@@ -209,6 +209,8 @@ func TestSchemaCommandAddTransferReturnsInputModes(t *testing.T) {
 
 	output := commandSchemaForTest(t, "add-transfer")
 
+	assertMutatingDryRunCommand(t, output)
+
 	assertInputNotUnconditionallyRequired(t, output, "url")
 	assertInputNotUnconditionallyRequired(t, output, "json")
 	assertInputNotUnconditionallyRequired(t, output, "movie-source")
@@ -259,6 +261,8 @@ func TestSchemaCommandSettingsSetReturnsInputModes(t *testing.T) {
 	t.Parallel()
 
 	output := commandSchemaForTest(t, "settings set")
+
+	assertMutatingDryRunCommand(t, output)
 
 	assertInputNotUnconditionallyRequired(t, output, "key")
 	assertInputNotUnconditionallyRequired(t, output, "value")
@@ -611,44 +615,6 @@ func TestAuthLoginDescribeOutputsMetadataWithoutExecuting(t *testing.T) {
 	}
 }
 
-func TestSchemaCommandAddTransferReturnsDryRunMetadata(t *testing.T) {
-	t.Parallel()
-
-	stdout := &bytes.Buffer{}
-	command := newRootCommand(&appContext{
-		opts:   &appOptions{output: outputJSON},
-		stdin:  strings.NewReader(""),
-		stdout: stdout,
-		stderr: &bytes.Buffer{},
-	})
-	command.SetArgs([]string{"schema", "command", "add-transfer", "--output", "json"})
-	if err := command.Execute(); err != nil {
-		t.Fatalf("Execute() error = %v", err)
-	}
-
-	var output schemaEntry
-	if err := json.Unmarshal(stdout.Bytes(), &output); err != nil {
-		t.Fatalf("json.Unmarshal() error = %v", err)
-	}
-	if !output.Mutates {
-		t.Fatal("add-transfer metadata should be mutating")
-	}
-	if !output.SupportsDryRun {
-		t.Fatal("add-transfer metadata should support dry run")
-	}
-
-	foundDryRun := false
-	for _, input := range output.Inputs {
-		if input.Name == "dry-run" {
-			foundDryRun = true
-			break
-		}
-	}
-	if !foundDryRun {
-		t.Fatal("add-transfer metadata missing dry-run input")
-	}
-}
-
 func TestSchemaCommandGetTransferReturnsFieldMetadata(t *testing.T) {
 	t.Parallel()
 
@@ -673,44 +639,6 @@ func TestSchemaCommandGetTransferReturnsFieldMetadata(t *testing.T) {
 	}
 	if !output.SupportsFields {
 		t.Fatal("get-transfer metadata should support fields")
-	}
-}
-
-func TestSchemaCommandSettingsSetReturnsDryRunMetadata(t *testing.T) {
-	t.Parallel()
-
-	stdout := &bytes.Buffer{}
-	command := newRootCommand(&appContext{
-		opts:   &appOptions{output: outputJSON},
-		stdin:  strings.NewReader(""),
-		stdout: stdout,
-		stderr: &bytes.Buffer{},
-	})
-	command.SetArgs([]string{"schema", "command", "settings set", "--output", "json"})
-	if err := command.Execute(); err != nil {
-		t.Fatalf("Execute() error = %v", err)
-	}
-
-	var output schemaEntry
-	if err := json.Unmarshal(stdout.Bytes(), &output); err != nil {
-		t.Fatalf("json.Unmarshal() error = %v", err)
-	}
-	if !output.Mutates {
-		t.Fatal("settings set metadata should be mutating")
-	}
-	if !output.SupportsDryRun {
-		t.Fatal("settings set metadata should support dry run")
-	}
-
-	foundDryRun := false
-	for _, input := range output.Inputs {
-		if input.Name == "dry-run" {
-			foundDryRun = true
-			break
-		}
-	}
-	if !foundDryRun {
-		t.Fatal("settings set metadata missing dry-run input")
 	}
 }
 
@@ -843,6 +771,17 @@ func assertInputNotUnconditionallyRequired(t *testing.T, entry schemaEntry, inpu
 		}
 	}
 	t.Fatalf("%s inputs = %#v, want input %q", entry.ID, entry.Inputs, inputName)
+}
+
+func assertMutatingDryRunCommand(t *testing.T, entry schemaEntry) {
+	t.Helper()
+
+	if !entry.Mutates || !entry.SupportsDryRun {
+		t.Fatalf("%s: Mutates = %v, SupportsDryRun = %v, want both true", entry.ID, entry.Mutates, entry.SupportsDryRun)
+	}
+	if !slices.ContainsFunc(entry.Inputs, func(input schemaInput) bool { return input.Name == "dry-run" }) {
+		t.Fatalf("%s: inputs missing dry-run", entry.ID)
+	}
 }
 
 func assertInputModes(t *testing.T, entry schemaEntry, expected []schemaInputMode) {

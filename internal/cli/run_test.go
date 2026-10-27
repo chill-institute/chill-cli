@@ -316,6 +316,14 @@ func TestRunSettingsSetDryRunReturnsLocalPreview(t *testing.T) {
 	t.Parallel()
 
 	configPath := filepath.Join(t.TempDir(), "config.json")
+	store, err := config.NewStore(configPath)
+	if err != nil {
+		t.Fatalf("NewStore() error = %v", err)
+	}
+	if err := store.Save(config.Default()); err != nil {
+		t.Fatalf("Save() error = %v", err)
+	}
+
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}
 	exitCode := Run([]string{
@@ -355,6 +363,14 @@ func TestRunSettingsSetDryRunReturnsLocalPreview(t *testing.T) {
 	}
 	if request["value"] != "https://api.chill.test" {
 		t.Fatalf("request.value = %v, want %q", request["value"], "https://api.chill.test")
+	}
+
+	cfg, err := store.Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.APIBaseURL != config.Default().APIBaseURL {
+		t.Fatalf("APIBaseURL = %q, want %q kept after a dry run", cfg.APIBaseURL, config.Default().APIBaseURL)
 	}
 }
 
@@ -479,6 +495,17 @@ func TestRunAuthLogoutDryRunReturnsLocalPreview(t *testing.T) {
 	}
 	if request["had_auth_token"] != true {
 		t.Fatalf("request.had_auth_token = %v, want true", request["had_auth_token"])
+	}
+	if output["dry_run"] != true {
+		t.Fatalf("dry_run = %v, want true", output["dry_run"])
+	}
+
+	cfg, err := store.Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.AuthToken != "saved-token" {
+		t.Fatalf("AuthToken = %q, want the token kept after a dry run", cfg.AuthToken)
 	}
 }
 
