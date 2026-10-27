@@ -165,7 +165,8 @@ description = "Check local schema metadata against a sibling chill-contracts pro
 run = """
 repo_root="$(git rev-parse --show-toplevel)"
 proto_path="${CHILLY_CONTRACTS_PROTO:-$repo_root/../chill-contracts/proto/chill/v4/api.proto}"
-CHILLY_CONTRACTS_PROTO="$proto_path" CHILLY_REQUIRE_CONTRACTS=1 go test ./internal/cli -run '^TestLocalSchemaMatchesContractsProto$'
+# The proto lives outside this module, where Go's test cache does not look.
+CHILLY_CONTRACTS_PROTO="$proto_path" CHILLY_REQUIRE_CONTRACTS=1 go test -count=1 ./internal/cli -run '^TestLocalSchemaMatchesContractsProto$'
 """
 
 [tasks.hooks]
