@@ -19,11 +19,7 @@ mise run verify
   mutations with `--dry-run`.
 - Keep indexer health tri-state: `healthy`, `degraded`, or `down`.
 - `pkg/` must not import `internal/`; its changes follow semantic versioning.
-- Update [the bundled skill](./skills/chilly-cli/SKILL.md) with command, auth,
-  default, or output changes.
-- `releaseRules` in [`.releaserc.json`](./.releaserc.json) match every
-  chill.institute package repo; [`smoke.mjs`](./.github/release/smoke.mjs)
-  fails on drift.
+- Bundled CLI usage: [chilly-cli](./skills/chilly-cli/SKILL.md).
 
 ## Proof map
 
@@ -35,7 +31,7 @@ mise run verify
 | Release rules | `npm ci --prefix .github/release --ignore-scripts && node .github/release/smoke.mjs` | Verify |
 | GoReleaser config | `goreleaser release --snapshot --clean` twice; `dist/checksums.txt` must match | none |
 | Hosted API | `mise run test:integration` ([setup](./CONTRIBUTING.md#hosted-integration)) | none |
-| Release | push to `main`; recover with a Main dispatch with `tag` (`dry_run` defaults on) | Main `release`, `publish` |
+| Release and recovery | [Main inputs](./.github/workflows/main.yml), [release workflow](./.github/workflows/_release.yml) | Main |
 
 Gaps:
 
