@@ -22,4 +22,5 @@ ignored `.env.local`:
 CHILLY_TEST_API_URL=https://api.chill.institute CHILLY_TEST_TOKEN=... mise run test:integration
 ```
 
-`main` releases from Conventional Commits ([delivery](./docs/architecture.md#delivery)).
+Release rules: [`.releaserc.json`](./.releaserc.json). Delivery and recovery:
+[Main](./.github/workflows/main.yml).

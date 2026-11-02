@@ -34,10 +34,8 @@ the token with the API before saving it unless `--skip-verify` is set.
 
 ## Delivery
 
-[Main](../.github/workflows/main.yml) and
-[`_release.yml`](../.github/workflows/_release.yml) own the release. Recover a
-release by dispatching Main with its `tag`; recovery never rebuilds a published
-release.
+[Main](../.github/workflows/main.yml) defines release and recovery inputs;
+[`_release.yml`](../.github/workflows/_release.yml) implements delivery.
 
 `scripts/homebrew-formula` writes the formula because GoReleaser cannot write
 the tap after publication or sign tap commits. It stays a formula, not a cask:
