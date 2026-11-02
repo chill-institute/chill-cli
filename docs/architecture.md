@@ -8,20 +8,20 @@ Sibling Go clients import `github.com/chill-institute/chill-cli/v2/pkg/...`;
 
 ## Local State
 
-The default profile is `chilly/config.json` under `$XDG_CONFIG_HOME`, or the
-OS user config directory when it is unset; named profiles live in
-`chilly/profiles/<profile>/config.json`. Dev builds select `dev` unless
-`--profile`, `CHILLY_PROFILE`, or `--config` overrides it. File modes and
-atomic writes are in [Security](../SECURITY.md#boundaries).
+Use `chilly settings path` to locate a profile and `chilly settings show` to
+inspect its selected host. Profile resolution lives in
+[pkg/config/store.go](../pkg/config/store.go); file modes and atomic writes
+are in [Security](../SECURITY.md#boundaries).
 
 ## Command Contract
 
-The metadata registry in `internal/cli` is the runtime source for `schema`,
-`--describe`, raw JSON input, `--fields`, dry-run eligibility, and aliases.
+Use `schema`, `--describe`, and command help for inputs, fields, defaults,
+aliases, and dry-run support. Their source is
+[schema_registry.go](../internal/cli/schema_registry.go).
 
 - JSON failures are one envelope on `stderr`.
 - NDJSON streams root arrays, or item envelopes for nested collections.
-- Exit codes: usage `2`, auth `3`, API `4`, internal `5`.
+- Exit codes are defined in [cli_errors.go](../internal/cli/cli_errors.go).
 - `--fields` accepts protobuf JSON names and snake_case aliases.
 - `--dry-run` renders the request without loading auth or mutating.
 - Requests carry `X-Request-Id`, `X-Chill-Client: cli`, and the build version.
