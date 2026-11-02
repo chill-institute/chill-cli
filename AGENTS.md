@@ -19,8 +19,7 @@ mise run verify
   mutations with `--dry-run`.
 - Keep indexer health tri-state: `healthy`, `degraded`, or `down`.
 - `pkg/` must not import `internal/`; its changes follow semantic versioning.
-- Update [the bundled skill](./skills/chilly-cli/SKILL.md) with command, auth,
-  default, or output changes.
+- Bundled CLI usage: [chilly-cli](./skills/chilly-cli/SKILL.md).
 
 ## Proof map
 
