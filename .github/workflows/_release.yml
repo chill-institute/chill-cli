@@ -148,7 +148,7 @@ jobs:
           git tag --points-at HEAD | grep -Fqx "$RELEASE_TAG"
 
       - name: Set up mise
-        uses: jdx/mise-action@6612f0ef07ed2a736cd1e00a94a065522dd41195 # v5.2.5
+        uses: jdx/mise-action@b44d12e7d0d8ee7461bb893e1b1993500433185b # v5.2.7
         with:
           cache: false
 
@@ -169,7 +169,7 @@ jobs:
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@a4f02ab5355a589de60d917a659ce617ed19b3de # v7.3.0
         with:
-          version: v2.19.0
+          version: v2.20.0
           args: ${{ inputs.dry_run && 'release --clean --skip=publish' || 'release --clean' }}
           workdir: ${{ github.workspace }}
         env:
@@ -269,7 +269,7 @@ jobs:
           done
 
       - name: Set up mise
-        uses: jdx/mise-action@6612f0ef07ed2a736cd1e00a94a065522dd41195 # v5.2.5
+        uses: jdx/mise-action@b44d12e7d0d8ee7461bb893e1b1993500433185b # v5.2.7
         with:
           cache: false
 
