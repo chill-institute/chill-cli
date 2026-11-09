@@ -2,7 +2,7 @@
 node = "24.22.2"
 actionlint = "1.7.12"
 go = "1.27.3"
-zizmor = "1.31.1"
+zizmor = "1.32.0"
 
 [env]
 GOWORK = "off"
