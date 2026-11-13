@@ -7,8 +7,6 @@
     "semantic-release": "25.0.9"
   },
   "overrides": {
-    "@semantic-release/npm": {
-      "npm": "11.21.2"
-    }
+    "npm": "11.21.2"
   }
 }
