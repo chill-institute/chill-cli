@@ -22,6 +22,10 @@ func TestAuthLoginWebTokenFlowPromptsForTokenAndVerifies(t *testing.T) {
 	t.Parallel()
 
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if request.URL.Path == "/healthz" {
+			writer.WriteHeader(http.StatusOK)
+			return
+		}
 		if request.URL.Path != "/v4/chill.v4.UserService/GetUserProfile" {
 			t.Fatalf("path = %q", request.URL.Path)
 		}
@@ -100,6 +104,10 @@ func TestAuthLoginLocalBrowserFlowCapturesLoopbackToken(t *testing.T) {
 	t.Parallel()
 
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if request.URL.Path == "/healthz" {
+			writer.WriteHeader(http.StatusOK)
+			return
+		}
 		if request.URL.Path != "/v4/chill.v4.UserService/GetUserProfile" {
 			t.Fatalf("path = %q", request.URL.Path)
 		}

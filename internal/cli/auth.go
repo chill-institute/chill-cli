@@ -87,7 +87,10 @@ chilly auth login --local-browser --no-browser
 				return app.writeLocalDryRunPreview("auth login", request)
 			}
 			if resolvedToken == "" {
-				loginBaseURL := app.firstReachableAPIBaseURL(context.Background(), cfg)
+				loginBaseURL, err := app.firstReachableAPIBaseURL(cmd.Context(), cfg)
+				if err != nil {
+					return err
+				}
 				cfg = cfg.WithLastWorkingAPIBaseURL(loginBaseURL)
 				if resolvedLocalBrowser {
 					resolvedToken, err = app.loginWithBrowser(context.Background(), loginBaseURL, resolvedSkipOpen)

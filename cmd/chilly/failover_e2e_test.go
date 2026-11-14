@@ -86,8 +86,8 @@ func TestCLIFailsOverAndRemembersWorkingHost(t *testing.T) {
 	if got := healthy.hits.Load(); got != 2 {
 		t.Fatalf("healthy host hits = %d, want 2", got)
 	}
-	if got := storedConfig(t, configPath)["last_working_api_base_url"]; got != healthy.server.URL {
-		t.Fatalf("last_working_api_base_url = %v, want %s", got, healthy.server.URL)
+	if got := storedConfig(t, configPath)["last_working_api_base_url"]; got != nil {
+		t.Fatalf("remembered host leaked into credential file: %v", got)
 	}
 
 	stdout, stderr, exitCode := runCLI("--config", configPath, "--output", "json", "settings", "show")

@@ -182,33 +182,42 @@ func (store Store) Path() string {
 }
 
 func (store Store) Load() (Config, error) {
+	cfg := Default()
 	content, err := os.ReadFile(store.path)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return Default(), nil
-		}
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return Config{}, fmt.Errorf("read config %q: %w", store.path, err)
 	}
-
-	var cfg Config
-	if err := json.Unmarshal(content, &cfg); err != nil {
-		return Config{}, fmt.Errorf("parse config %q: %w", store.path, err)
+	if err == nil {
+		if err := json.Unmarshal(content, &cfg); err != nil {
+			return Config{}, fmt.Errorf("parse config %q: %w", store.path, err)
+		}
+	}
+	if remembered, err := os.ReadFile(store.path + ".host"); err == nil {
+		cfg.LastWorkingAPIBaseURL = strings.TrimSpace(string(remembered))
 	}
 	return cfg.Normalized(), nil
 }
 
+func (store Store) RememberWorkingAPIBaseURL(baseURL string) error {
+	return (Store{path: store.path + ".host"}).write([]byte(strings.TrimSpace(baseURL) + "\n"))
+}
+
 func (store Store) Save(cfg Config) error {
 	normalized := cfg.Normalized()
-
-	if err := os.MkdirAll(filepath.Dir(store.path), directoryPerm); err != nil {
-		return fmt.Errorf("create config directory: %w", err)
-	}
 
 	payload, err := json.MarshalIndent(normalized, "", "  ")
 	if err != nil {
 		return fmt.Errorf("encode config: %w", err)
 	}
 	payload = append(payload, '\n')
+
+	return store.write(payload)
+}
+
+func (store Store) write(payload []byte) error {
+	if err := os.MkdirAll(filepath.Dir(store.path), directoryPerm); err != nil {
+		return fmt.Errorf("create config directory: %w", err)
+	}
 
 	tmpFile, err := os.CreateTemp(filepath.Dir(store.path), tempFilePattern)
 	if err != nil {

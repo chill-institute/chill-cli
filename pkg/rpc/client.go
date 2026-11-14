@@ -6,6 +6,7 @@ package rpc
 import (
 	"context"
 	"crypto/rand"
+	"crypto/tls"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -224,9 +225,13 @@ func (client Client) Call(ctx context.Context, req CallRequest) (CallResponse, e
 		return CallResponse{}, fmt.Errorf("encode request body: %w", err)
 	}
 
+	ctx, cancel := context.WithTimeout(ctx, DefaultClientTimeout)
+	defer cancel()
 	var lastErr error
-	for _, baseURL := range client.baseURLs {
-		response, reach, err := client.callHost(ctx, baseURL, procedure, payload, req)
+	for index, baseURL := range client.baseURLs {
+		attemptCtx, cancelAttempt := hostAttemptContext(ctx, len(client.baseURLs)-index, DefaultClientTimeout)
+		response, reach, err := client.callHost(attemptCtx, baseURL, procedure, payload, req)
+		cancelAttempt()
 		if err == nil {
 			return response, nil
 		}
@@ -240,8 +245,10 @@ func (client Client) Call(ctx context.Context, req CallRequest) (CallResponse, e
 
 func (client Client) FirstReachableBaseURL(ctx context.Context) (string, error) {
 	var lastErr error
-	for _, baseURL := range client.baseURLs {
-		err := client.checkHealth(ctx, baseURL)
+	for index, baseURL := range client.baseURLs {
+		probeCtx, cancel := hostAttemptContext(ctx, len(client.baseURLs)-index, 2*time.Second)
+		err := client.checkHealth(probeCtx, baseURL)
+		cancel()
 		if err == nil {
 			return baseURL, nil
 		}
@@ -251,6 +258,13 @@ func (client Client) FirstReachableBaseURL(ctx context.Context) (string, error) 
 		}
 	}
 	return "", fmt.Errorf("no reachable API host: %w", lastErr)
+}
+
+func hostAttemptContext(ctx context.Context, remaining int, limit time.Duration) (context.Context, context.CancelFunc) {
+	if deadline, ok := ctx.Deadline(); ok {
+		limit = min(limit, time.Until(deadline)/time.Duration(remaining))
+	}
+	return context.WithTimeout(ctx, limit)
 }
 
 func (client Client) checkHealth(ctx context.Context, baseURL string) error {
@@ -308,8 +322,13 @@ func (client Client) callHost(ctx context.Context, baseURL string, procedure str
 	}
 
 	var headersWritten atomic.Bool
+	var preSendFailure atomic.Bool
+	var connectionObtained atomic.Bool
 	traceCtx := httptrace.WithClientTrace(ctx, &httptrace.ClientTrace{
-		WroteHeaders: func() { headersWritten.Store(true) },
+		WroteHeaders:     func() { headersWritten.Store(true) },
+		ConnectDone:      func(_, _ string, err error) { preSendFailure.Store(err != nil) },
+		TLSHandshakeDone: func(_ tls.ConnectionState, err error) { preSendFailure.Store(err != nil) },
+		GotConn:          func(httptrace.GotConnInfo) { connectionObtained.Store(true) },
 	})
 
 	httpRequest, err := http.NewRequestWithContext(traceCtx, http.MethodPost, endpoint, strings.NewReader(string(payload)))
@@ -328,7 +347,8 @@ func (client Client) callHost(ctx context.Context, baseURL string, procedure str
 
 	httpResponse, err := client.httpClient.Do(httpRequest)
 	if err != nil {
-		if headersWritten.Load() {
+		var dnsErr *net.DNSError
+		if headersWritten.Load() || connectionObtained.Load() || (!preSendFailure.Load() && !errors.As(err, &dnsErr)) {
 			return CallResponse{}, requestSentWithoutAnswer, fmt.Errorf("execute request: %w", err)
 		}
 		return CallResponse{}, requestNeverSent, fmt.Errorf("execute request: %w", err)
@@ -356,7 +376,7 @@ func (client Client) callHost(ctx context.Context, baseURL string, procedure str
 				Err:        fmt.Errorf("read error response: %w", err),
 			}
 		}
-		return CallResponse{}, hostAnswered, fmt.Errorf("read response: %w", err)
+		return CallResponse{}, requestSentWithoutAnswer, fmt.Errorf("read response: %w", err)
 	}
 	callResponse.Body = responseBody
 

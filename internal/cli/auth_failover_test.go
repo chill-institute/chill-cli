@@ -3,7 +3,6 @@ package cli
 import (
 	"bytes"
 	"io"
-	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -19,12 +18,11 @@ import (
 func TestAuthLoginStartsBrowserFlowOnFirstReachableHost(t *testing.T) {
 	t.Parallel()
 
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("listen: %v", err)
-	}
-	unreachable := "http://" + listener.Addr().String()
-	_ = listener.Close()
+	release := make(chan struct{})
+	hanging := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { <-release }))
+	defer hanging.Close()
+	defer close(release)
+	unreachable := hanging.URL
 
 	reachable := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		switch request.URL.Path {
@@ -46,6 +44,7 @@ func TestAuthLoginStartsBrowserFlowOnFirstReachableHost(t *testing.T) {
 		stdout:          &bytes.Buffer{},
 		stderr:          &bytes.Buffer{},
 		authFlowTimeout: 2 * time.Second,
+		rpcTimeout:      400 * time.Millisecond,
 		openURL: func(rawURL string) error {
 			openedURL = rawURL
 			return completeLoopbackLogin(t, rawURL, "failover-token")
