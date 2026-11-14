@@ -66,7 +66,7 @@ chilly schema command search --output json
 				opts.profile = resolvedProfile
 			}
 			if trimmedAPIURL := strings.TrimSpace(opts.apiURL); trimmedAPIURL != "" {
-				normalizedAPIURL, err := normalizeAPIBaseURL(trimmedAPIURL)
+				normalizedAPIURL, err := normalizeAPIBaseURLList(trimmedAPIURL)
 				if err != nil {
 					return err
 				}
@@ -102,7 +102,7 @@ chilly schema command search --output json
 	command.SetErr(app.stderr)
 	command.PersistentFlags().StringVar(&opts.configPath, "config", "", "config file path")
 	command.PersistentFlags().StringVar(&opts.profile, "profile", "", "config profile to use (default builds use default, dev builds use dev)")
-	command.PersistentFlags().StringVar(&opts.apiURL, "api-url", "", "override API base URL")
+	command.PersistentFlags().StringVar(&opts.apiURL, "api-url", "", "override API base URL; a comma-separated list fails over in order")
 	command.PersistentFlags().StringVar(&opts.output, "output", outputPretty, "output mode: pretty|json|ndjson")
 	command.PersistentFlags().Bool("describe", false, "print command metadata and exit")
 

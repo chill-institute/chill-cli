@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 	"net/url"
+	"slices"
 	"strings"
 
 	"github.com/chill-institute/chill-cli/v2/pkg/config"
@@ -81,9 +82,10 @@ func newSettingsShowCommand(app *appContext) *cobra.Command {
 				authToken = redactedToken
 			}
 			return app.writeAnyWithRenderer(map[string]any{
-				"profile":      profile,
-				"api_base_url": cfg.APIBaseURL,
-				"auth_token":   authToken,
+				"profile":       profile,
+				"api_base_url":  cfg.APIBaseURL,
+				"api_base_urls": cfg.APIBaseURLs(),
+				"auth_token":    authToken,
 			}, selection, nil)
 		},
 	}
@@ -136,6 +138,7 @@ func newSettingsSetCommand(app *appContext) *cobra.Command {
 		Short: "Set one local CLI setting",
 		Example: strings.TrimSpace(`
 chilly settings set api-base-url https://api.chill.institute
+chilly settings set api-base-url https://api.example.test,https://api-backup.example.test
 chilly settings set api-base-url https://api.chill.institute --dry-run --output json
 printf '{"key":"api-base-url","value":"https://api.chill.institute"}' | chilly settings set --json @- --dry-run --output json
 `),
@@ -162,6 +165,7 @@ printf '{"key":"api-base-url","value":"https://api.chill.institute"}' | chilly s
 					return app.writeLocalDryRunPreview("settings set", request)
 				}
 				cfg.APIBaseURL = nextValue
+				cfg.LastWorkingAPIBaseURL = ""
 			default:
 				return fmt.Errorf("unsupported settings key %q", key)
 			}
@@ -229,7 +233,7 @@ func resolveSettingsSetInput(app *appContext, args []string, rawRequest string) 
 func normalizeSettingsValue(key string, raw string) (string, error) {
 	switch key {
 	case "api-base-url":
-		return normalizeAPIBaseURL(raw)
+		return normalizeAPIBaseURLList(raw)
 	default:
 		return "", fmt.Errorf("unsupported settings key %q", key)
 	}
@@ -255,6 +259,24 @@ func normalizeSettingsKey(raw string) (string, error) {
 	default:
 		return "", usageError("unsupported_settings_key", "unsupported settings key %q (supported: api-base-url)", raw)
 	}
+}
+
+func normalizeAPIBaseURLList(raw string) (string, error) {
+	if strings.TrimSpace(raw) == "" {
+		return "", usageError("empty_api_base_url", "api-base-url cannot be empty")
+	}
+	parts := strings.Split(raw, ",")
+	normalized := make([]string, 0, len(parts))
+	for _, part := range parts {
+		baseURL, err := normalizeAPIBaseURL(part)
+		if err != nil {
+			return "", err
+		}
+		if !slices.Contains(normalized, baseURL) {
+			normalized = append(normalized, baseURL)
+		}
+	}
+	return config.JoinAPIBaseURLs(normalized), nil
 }
 
 func normalizeAPIBaseURL(raw string) (string, error) {

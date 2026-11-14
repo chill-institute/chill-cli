@@ -23,3 +23,23 @@ const (
 	ProcedureUserGetDownloadFolder        = "chill.v4.UserService/GetDownloadFolder"
 	ProcedureUserGetFolder                = "chill.v4.UserService/GetFolder"
 )
+
+var readOnlyProcedures = map[string]bool{
+	ProcedureUserSearch:                   true,
+	ProcedureUserGetMovies:                true,
+	ProcedureUserGetTVShows:               true,
+	ProcedureUserGetTVShowDetail:          true,
+	ProcedureUserGetTVShowSeason:          true,
+	ProcedureUserGetTVShowEpisodeDownload: true,
+	ProcedureUserGetTVShowSeasonDownloads: true,
+	ProcedureUserGetUserProfile:           true,
+	ProcedureUserGetUserSettings:          true,
+	ProcedureUserGetTransfer:              true,
+	ProcedureUserGetIndexers:              true,
+	ProcedureUserGetDownloadFolder:        true,
+	ProcedureUserGetFolder:                true,
+}
+
+func IsReadOnlyProcedure(procedure string) bool {
+	return readOnlyProcedures[procedure]
+}

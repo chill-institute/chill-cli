@@ -208,7 +208,7 @@ func TestAuthLoginWebTokenFlowRejectsNonInteractiveInput(t *testing.T) {
 		isInputTerminal: func(io.Reader) bool { return false },
 	}
 
-	_, err := app.loginWithWebToken(config.Config{APIBaseURL: "https://api.chill.institute"}, true)
+	_, err := app.loginWithWebToken("https://api.chill.institute", true)
 	if err == nil || !strings.Contains(err.Error(), "requires a terminal for token entry") {
 		t.Fatalf("loginWithWebToken() error = %v", err)
 	}
@@ -234,7 +234,7 @@ func TestAuthLoginWebTokenFlowSupportsPromptOnly(t *testing.T) {
 		},
 	}
 
-	token, err := app.loginWithWebToken(config.Config{APIBaseURL: "https://api.chill.institute"}, false)
+	token, err := app.loginWithWebToken("https://api.chill.institute", false)
 	if err != nil {
 		t.Fatalf("loginWithWebToken() error = %v", err)
 	}
