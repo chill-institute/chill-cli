@@ -236,7 +236,7 @@ func (client Client) Call(ctx context.Context, req CallRequest) (CallResponse, e
 			return response, nil
 		}
 		lastErr = err
-		if ctx.Err() != nil || isTimeoutOrCancellation(err) || !reach.allowsRepeatOnAnotherHost(req.ReadOnly) {
+		if ctx.Err() != nil || (reach != requestNeverSent && isTimeoutOrCancellation(err)) || !reach.allowsRepeatOnAnotherHost(req.ReadOnly) {
 			return CallResponse{}, err
 		}
 	}
@@ -346,11 +346,10 @@ func (client Client) callHost(ctx context.Context, baseURL string, procedure str
 	httpResponse, err := client.httpClient.Do(httpRequest)
 	if err != nil {
 		reach := hostAnswered
-		var connectionErr *net.OpError
 		if httpResponse == nil {
 			if connectionStarted.Load() && !headersWritten.Load() && !connectionObtained.Load() {
 				reach = requestNeverSent
-			} else if errors.As(err, &connectionErr) || errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
+			} else if !isTimeoutOrCancellation(err) {
 				reach = requestSentWithoutAnswer
 			}
 		}

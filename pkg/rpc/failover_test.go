@@ -269,6 +269,31 @@ func TestMutationFailsOverOnTLSHandshakeFailure(t *testing.T) {
 	}
 }
 
+func TestMutationFailsOverWhenTLSHandshakeTimesOut(t *testing.T) {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = listener.Close() }()
+	go func() {
+		for {
+			conn, err := listener.Accept()
+			if err != nil {
+				return
+			}
+			t.Cleanup(func() { _ = conn.Close() })
+		}
+	}()
+	fallback := newCountingHost(t, respondOK)
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.TLSHandshakeTimeout = 100 * time.Millisecond
+	httpClient := &http.Client{Transport: transport, Timeout: 2 * time.Second}
+	response, err := callWithFailover(t, httpClient, false, "https://"+listener.Addr().String(), fallback.server.URL)
+	if err != nil || response.BaseURL != fallback.server.URL || fallback.hits.Load() != 1 {
+		t.Fatalf("response=%+v error=%v fallback=%d", response, err, fallback.hits.Load())
+	}
+}
+
 func TestHealthProbesHaveIndependentDeadlines(t *testing.T) {
 	first := newCountingHost(t, func(w http.ResponseWriter, r *http.Request) {
 		<-r.Context().Done()
