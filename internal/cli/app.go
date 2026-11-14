@@ -167,42 +167,14 @@ func (app *appContext) rpcClient(cfg config.Config) *rpc.Client {
 	)
 }
 
-func (app *appContext) rememberWorkingAPIBaseURL(cfg config.Config, baseURL string) {
-	if len(cfg.APIBaseURLs()) < 2 {
-		return
-	}
-	store, err := app.configStore()
-	if err != nil {
-		return
-	}
-	stored, err := store.Load()
-	if err != nil {
-		return
-	}
-	updated := stored.WithLastWorkingAPIBaseURL(baseURL)
-	if updated.LastWorkingAPIBaseURL == stored.LastWorkingAPIBaseURL {
-		return
-	}
-	_ = store.Save(updated)
-}
-
-func (app *appContext) firstReachableAPIBaseURL(ctx context.Context, cfg config.Config) string {
-	baseURLs := cfg.APIBaseURLs()
-	if len(baseURLs) < 2 {
-		return baseURLs[0]
-	}
+func (app *appContext) firstReachableAPIBaseURL(ctx context.Context, cfg config.Config) (string, error) {
 	var reachable string
-	_ = app.withProgress(func() error {
-		probeCtx, cancel := app.rpcCallContext(ctx)
-		defer cancel()
+	err := app.withProgress(func() error {
 		var err error
-		reachable, err = app.rpcClient(cfg).FirstReachableBaseURL(probeCtx)
+		reachable, err = app.rpcClient(cfg).FirstReachableBaseURL(ctx)
 		return err
 	})
-	if reachable == "" {
-		return baseURLs[0]
-	}
-	return reachable
+	return reachable, err
 }
 
 func (app *appContext) userToken(cfg config.Config) (string, error) {
@@ -239,7 +211,6 @@ func (app *appContext) callRPC(
 	if err != nil {
 		return rpc.CallResponse{}, err
 	}
-	app.rememberWorkingAPIBaseURL(cfg, response.BaseURL)
 	return response, nil
 }
 
@@ -248,7 +219,7 @@ func (app *appContext) rpcCallContext(ctx context.Context) (context.Context, con
 		ctx = context.Background()
 	}
 	if _, ok := ctx.Deadline(); ok {
-		return ctx, func() {}
+		return context.WithCancel(ctx)
 	}
 	timeout := app.rpcTimeout
 	if timeout <= 0 {

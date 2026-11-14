@@ -164,7 +164,7 @@ func (client Client) BaseURLs() []string {
 
 func prepareHTTPClient(source *http.Client) *http.Client {
 	if source == nil {
-		source = &http.Client{Timeout: DefaultClientTimeout, Transport: defaultTransport()}
+		source = &http.Client{Transport: defaultTransport()}
 	}
 
 	client := *source
@@ -224,6 +224,11 @@ func (client Client) Call(ctx context.Context, req CallRequest) (CallResponse, e
 		return CallResponse{}, fmt.Errorf("encode request body: %w", err)
 	}
 
+	if _, ok := ctx.Deadline(); !ok {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, DefaultClientTimeout)
+		defer cancel()
+	}
 	var lastErr error
 	for _, baseURL := range client.baseURLs {
 		response, reach, err := client.callHost(ctx, baseURL, procedure, payload, req)
@@ -231,7 +236,7 @@ func (client Client) Call(ctx context.Context, req CallRequest) (CallResponse, e
 			return response, nil
 		}
 		lastErr = err
-		if ctx.Err() != nil || !reach.allowsRepeatOnAnotherHost(req.ReadOnly) {
+		if ctx.Err() != nil || (reach != requestNeverSent && isTimeoutOrCancellation(err)) || !reach.allowsRepeatOnAnotherHost(req.ReadOnly) {
 			return CallResponse{}, err
 		}
 	}
@@ -241,7 +246,9 @@ func (client Client) Call(ctx context.Context, req CallRequest) (CallResponse, e
 func (client Client) FirstReachableBaseURL(ctx context.Context) (string, error) {
 	var lastErr error
 	for _, baseURL := range client.baseURLs {
-		err := client.checkHealth(ctx, baseURL)
+		probeCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+		err := client.checkHealth(probeCtx, baseURL)
+		cancel()
 		if err == nil {
 			return baseURL, nil
 		}
@@ -251,6 +258,12 @@ func (client Client) FirstReachableBaseURL(ctx context.Context) (string, error) 
 		}
 	}
 	return "", fmt.Errorf("no reachable API host: %w", lastErr)
+}
+
+func isTimeoutOrCancellation(err error) bool {
+	var netErr net.Error
+	return errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) ||
+		(errors.As(err, &netErr) && netErr.Timeout())
 }
 
 func (client Client) checkHealth(ctx context.Context, baseURL string) error {
@@ -308,8 +321,12 @@ func (client Client) callHost(ctx context.Context, baseURL string, procedure str
 	}
 
 	var headersWritten atomic.Bool
+	var connectionObtained atomic.Bool
+	var connectionStarted atomic.Bool
 	traceCtx := httptrace.WithClientTrace(ctx, &httptrace.ClientTrace{
+		GetConn:      func(string) { connectionStarted.Store(true) },
 		WroteHeaders: func() { headersWritten.Store(true) },
+		GotConn:      func(httptrace.GotConnInfo) { connectionObtained.Store(true) },
 	})
 
 	httpRequest, err := http.NewRequestWithContext(traceCtx, http.MethodPost, endpoint, strings.NewReader(string(payload)))
@@ -328,10 +345,15 @@ func (client Client) callHost(ctx context.Context, baseURL string, procedure str
 
 	httpResponse, err := client.httpClient.Do(httpRequest)
 	if err != nil {
-		if headersWritten.Load() {
-			return CallResponse{}, requestSentWithoutAnswer, fmt.Errorf("execute request: %w", err)
+		reach := hostAnswered
+		if httpResponse == nil {
+			if connectionStarted.Load() && !headersWritten.Load() && !connectionObtained.Load() {
+				reach = requestNeverSent
+			} else if !isTimeoutOrCancellation(err) {
+				reach = requestSentWithoutAnswer
+			}
 		}
-		return CallResponse{}, requestNeverSent, fmt.Errorf("execute request: %w", err)
+		return CallResponse{}, reach, fmt.Errorf("execute request: %w", err)
 	}
 	defer func() {
 		_ = httpResponse.Body.Close()

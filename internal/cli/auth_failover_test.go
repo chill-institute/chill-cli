@@ -3,13 +3,13 @@ package cli
 import (
 	"bytes"
 	"io"
-	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -19,12 +19,9 @@ import (
 func TestAuthLoginStartsBrowserFlowOnFirstReachableHost(t *testing.T) {
 	t.Parallel()
 
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("listen: %v", err)
-	}
-	unreachable := "http://" + listener.Addr().String()
-	_ = listener.Close()
+	closed := httptest.NewServer(http.NotFoundHandler())
+	closed.Close()
+	unreachable := closed.URL
 
 	reachable := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		switch request.URL.Path {
@@ -46,6 +43,7 @@ func TestAuthLoginStartsBrowserFlowOnFirstReachableHost(t *testing.T) {
 		stdout:          &bytes.Buffer{},
 		stderr:          &bytes.Buffer{},
 		authFlowTimeout: 2 * time.Second,
+		rpcTimeout:      400 * time.Millisecond,
 		openURL: func(rawURL string) error {
 			openedURL = rawURL
 			return completeLoopbackLogin(t, rawURL, "failover-token")
@@ -69,7 +67,7 @@ func TestAuthLoginStartsBrowserFlowOnFirstReachableHost(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
 	}
-	if cfg.AuthToken != "failover-token" || cfg.LastWorkingAPIBaseURL != reachable.URL {
+	if cfg.AuthToken != "failover-token" {
 		t.Fatalf("saved config = %+v", cfg)
 	}
 }
@@ -98,4 +96,48 @@ func completeLoopbackLogin(t *testing.T, loginURL string, token string) error {
 		return err
 	}
 	return response.Body.Close()
+}
+
+func TestAuthLoginVerifiesTokenOnTheProbedHost(t *testing.T) {
+	t.Parallel()
+
+	var unhealthyProfileCalls atomic.Int32
+	unhealthy := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if request.URL.Path == "/v4/chill.v4.UserService/GetUserProfile" {
+			unhealthyProfileCalls.Add(1)
+		}
+		writer.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	defer unhealthy.Close()
+	healthy := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		switch request.URL.Path {
+		case "/healthz":
+			writer.WriteHeader(http.StatusOK)
+		case "/v4/chill.v4.UserService/GetUserProfile":
+			_, _ = writer.Write([]byte(`{"user_id":"user-123"}`))
+		}
+	}))
+	defer healthy.Close()
+
+	configPath := filepath.Join(t.TempDir(), "config.json")
+	app := &appContext{
+		opts:            &appOptions{configPath: configPath, apiURL: unhealthy.URL + "," + healthy.URL, output: outputJSON},
+		stdin:           strings.NewReader(""),
+		stdout:          &bytes.Buffer{},
+		stderr:          &bytes.Buffer{},
+		authFlowTimeout: 2 * time.Second,
+		rpcTimeout:      400 * time.Millisecond,
+		openURL: func(rawURL string) error {
+			return completeLoopbackLogin(t, rawURL, "probed-token")
+		},
+	}
+
+	command := newAuthLoginCommand(app)
+	command.SetArgs([]string{"--local-browser"})
+	if err := command.Execute(); err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if unhealthyProfileCalls.Load() != 0 {
+		t.Fatalf("token verification reached the unhealthy host %d times", unhealthyProfileCalls.Load())
+	}
 }

@@ -32,9 +32,8 @@ var userConfigDir = os.UserConfigDir
 var validProfilePattern = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]*$`)
 
 type Config struct {
-	APIBaseURL            string `json:"api_base_url"`
-	LastWorkingAPIBaseURL string `json:"last_working_api_base_url,omitempty"`
-	AuthToken             string `json:"auth_token,omitempty"`
+	APIBaseURL string `json:"api_base_url"`
+	AuthToken  string `json:"auth_token,omitempty"`
 }
 
 func DefaultPath(profile string) (string, error) {
@@ -114,7 +113,7 @@ func JoinAPIBaseURLs(baseURLs []string) string {
 	return strings.Join(baseURLs, apiBaseURLSep)
 }
 
-func (cfg Config) ConfiguredAPIBaseURLs() []string {
+func (cfg Config) APIBaseURLs() []string {
 	baseURLs := SplitAPIBaseURLs(cfg.APIBaseURL)
 	if len(baseURLs) == 0 || (len(baseURLs) == 1 && baseURLs[0] == defaultAPIBase) {
 		return OfficialAPIBaseURLs()
@@ -122,38 +121,9 @@ func (cfg Config) ConfiguredAPIBaseURLs() []string {
 	return baseURLs
 }
 
-func (cfg Config) APIBaseURLs() []string {
-	configured := cfg.ConfiguredAPIBaseURLs()
-	lastWorking := strings.TrimRight(strings.TrimSpace(cfg.LastWorkingAPIBaseURL), "/")
-	if !slices.Contains(configured, lastWorking) {
-		return configured
-	}
-	ordered := []string{lastWorking}
-	for _, baseURL := range configured {
-		if baseURL != lastWorking {
-			ordered = append(ordered, baseURL)
-		}
-	}
-	return ordered
-}
-
-func (cfg Config) WithLastWorkingAPIBaseURL(baseURL string) Config {
-	configured := cfg.ConfiguredAPIBaseURLs()
-	if !slices.Contains(configured, baseURL) {
-		return cfg
-	}
-	updated := cfg
-	updated.LastWorkingAPIBaseURL = baseURL
-	if configured[0] == baseURL {
-		updated.LastWorkingAPIBaseURL = ""
-	}
-	return updated
-}
-
 func (cfg Config) Normalized() Config {
 	normalized := cfg
 	normalized.APIBaseURL = strings.TrimSpace(normalized.APIBaseURL)
-	normalized.LastWorkingAPIBaseURL = strings.TrimSpace(normalized.LastWorkingAPIBaseURL)
 	normalized.AuthToken = strings.TrimSpace(normalized.AuthToken)
 	if normalized.APIBaseURL == "" {
 		normalized.APIBaseURL = defaultAPIBase
@@ -182,33 +152,34 @@ func (store Store) Path() string {
 }
 
 func (store Store) Load() (Config, error) {
+	cfg := Default()
 	content, err := os.ReadFile(store.path)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return Default(), nil
-		}
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return Config{}, fmt.Errorf("read config %q: %w", store.path, err)
 	}
-
-	var cfg Config
-	if err := json.Unmarshal(content, &cfg); err != nil {
-		return Config{}, fmt.Errorf("parse config %q: %w", store.path, err)
+	if err == nil {
+		if err := json.Unmarshal(content, &cfg); err != nil {
+			return Config{}, fmt.Errorf("parse config %q: %w", store.path, err)
+		}
 	}
 	return cfg.Normalized(), nil
 }
 
 func (store Store) Save(cfg Config) error {
 	normalized := cfg.Normalized()
-
-	if err := os.MkdirAll(filepath.Dir(store.path), directoryPerm); err != nil {
-		return fmt.Errorf("create config directory: %w", err)
-	}
-
 	payload, err := json.MarshalIndent(normalized, "", "  ")
 	if err != nil {
 		return fmt.Errorf("encode config: %w", err)
 	}
 	payload = append(payload, '\n')
+
+	return store.write(payload)
+}
+
+func (store Store) write(payload []byte) error {
+	if err := os.MkdirAll(filepath.Dir(store.path), directoryPerm); err != nil {
+		return fmt.Errorf("create config directory: %w", err)
+	}
 
 	tmpFile, err := os.CreateTemp(filepath.Dir(store.path), tempFilePattern)
 	if err != nil {

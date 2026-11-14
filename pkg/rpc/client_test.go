@@ -36,18 +36,6 @@ func (reader failingReader) Read([]byte) (int, error) {
 	return 0, reader.err
 }
 
-func TestNewClientUsesDefaultTimeoutWithoutCustomClient(t *testing.T) {
-	t.Parallel()
-
-	client := NewClient("https://api.chill.institute", nil)
-	if client.httpClient == nil {
-		t.Fatal("httpClient = nil")
-	}
-	if client.httpClient.Timeout != DefaultClientTimeout {
-		t.Fatalf("Timeout = %v, want %v", client.httpClient.Timeout, DefaultClientTimeout)
-	}
-}
-
 func TestNewClientCopiesCustomClientSettings(t *testing.T) {
 	t.Parallel()
 
@@ -503,5 +491,21 @@ func TestNewClientOptionsSetIdentityHeaders(t *testing.T) {
 	}
 	if !strings.HasPrefix(requestID, "mcp-") {
 		t.Fatalf("X-Request-Id = %q, want mcp- prefix", requestID)
+	}
+}
+
+func TestMutationDoesNotFailOverWithoutTransportTrace(t *testing.T) {
+	for _, procedure := range []string{"chill.v4.UserService/AddTransfer", "chill.v4.UserService/SaveUserSettings", "custom.Service/Unknown"} {
+		t.Run(procedure, func(t *testing.T) {
+			calls := 0
+			client := NewClient("https://first.example.test", &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+				calls++
+				return nil, io.ErrUnexpectedEOF
+			})}, WithFailoverBaseURLs("https://second.example.test"))
+			_, err := client.Call(context.Background(), CallRequest{Procedure: procedure, AuthMode: AuthNone})
+			if err == nil || calls != 1 {
+				t.Fatalf("error = %v, calls = %d", err, calls)
+			}
+		})
 	}
 }

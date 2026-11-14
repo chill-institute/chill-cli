@@ -5,7 +5,6 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"path/filepath"
 	"slices"
 	"sync/atomic"
@@ -57,20 +56,7 @@ func configureHosts(t *testing.T, baseURLs string) string {
 	return configPath
 }
 
-func storedConfig(t *testing.T, configPath string) map[string]any {
-	t.Helper()
-	content, err := os.ReadFile(configPath)
-	if err != nil {
-		t.Fatalf("read config: %v", err)
-	}
-	var stored map[string]any
-	if err := json.Unmarshal(content, &stored); err != nil {
-		t.Fatalf("decode config: %v", err)
-	}
-	return stored
-}
-
-func TestCLIFailsOverAndRemembersWorkingHost(t *testing.T) {
+func TestCLIFailsOverInConfiguredOrderOnEveryCall(t *testing.T) {
 	unavailable := newFakeAPIHost(t, http.StatusServiceUnavailable)
 	healthy := newFakeAPIHost(t, http.StatusOK)
 	configPath := configureHosts(t, unavailable.server.URL+","+healthy.server.URL)
@@ -80,14 +66,11 @@ func TestCLIFailsOverAndRemembersWorkingHost(t *testing.T) {
 			t.Fatalf("run %d: whoami exit = %d; stderr = %s", run, exitCode, stderr)
 		}
 	}
-	if got := unavailable.hits.Load(); got != 1 {
-		t.Fatalf("unavailable host hits = %d, want 1 (remembered host should be tried first)", got)
+	if got := unavailable.hits.Load(); got != 2 {
+		t.Fatalf("unavailable host hits = %d, want 2 (configured host should be tried first)", got)
 	}
 	if got := healthy.hits.Load(); got != 2 {
 		t.Fatalf("healthy host hits = %d, want 2", got)
-	}
-	if got := storedConfig(t, configPath)["last_working_api_base_url"]; got != healthy.server.URL {
-		t.Fatalf("last_working_api_base_url = %v, want %s", got, healthy.server.URL)
 	}
 
 	stdout, stderr, exitCode := runCLI("--config", configPath, "--output", "json", "settings", "show")
@@ -100,7 +83,7 @@ func TestCLIFailsOverAndRemembersWorkingHost(t *testing.T) {
 	if err := json.Unmarshal([]byte(stdout), &shown); err != nil {
 		t.Fatalf("decode settings show: %v", err)
 	}
-	if want := []string{healthy.server.URL, unavailable.server.URL}; !slices.Equal(shown.APIBaseURLs, want) {
+	if want := []string{unavailable.server.URL, healthy.server.URL}; !slices.Equal(shown.APIBaseURLs, want) {
 		t.Fatalf("api_base_urls = %v, want %v", shown.APIBaseURLs, want)
 	}
 }

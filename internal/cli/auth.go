@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/chill-institute/chill-cli/v2/pkg/config"
 	"github.com/chill-institute/chill-cli/v2/pkg/rpc"
 	"github.com/spf13/cobra"
 )
@@ -86,9 +87,19 @@ chilly auth login --local-browser --no-browser
 				}
 				return app.writeLocalDryRunPreview("auth login", request)
 			}
+			loginBaseURL := cfg.APIBaseURLs()[0]
 			if resolvedToken == "" {
-				loginBaseURL := app.firstReachableAPIBaseURL(context.Background(), cfg)
-				cfg = cfg.WithLastWorkingAPIBaseURL(loginBaseURL)
+				if len(cfg.APIBaseURLs()) > 1 {
+					reachable, probeErr := app.firstReachableAPIBaseURL(cmd.Context(), cfg)
+					if probeErr != nil {
+						if cmd.Context().Err() != nil {
+							return cmd.Context().Err()
+						}
+						_, _ = fmt.Fprintf(app.stderr, "Warning: API health probes failed; continuing login with %s: %v\n", loginBaseURL, probeErr)
+					} else {
+						loginBaseURL = reachable
+					}
+				}
 				if resolvedLocalBrowser {
 					resolvedToken, err = app.loginWithBrowser(context.Background(), loginBaseURL, resolvedSkipOpen)
 				} else {
@@ -107,7 +118,7 @@ chilly auth login --local-browser --no-browser
 			if !resolvedSkipVerify {
 				verifyResponse, err = app.callRPC(
 					context.Background(),
-					cfg,
+					preferAPIBaseURL(cfg, loginBaseURL),
 					procedureUserGetUserProfile,
 					map[string]any{},
 					rpc.AuthUser,
@@ -116,7 +127,6 @@ chilly auth login --local-browser --no-browser
 				if err != nil {
 					return fmt.Errorf("verify auth token: %w", err)
 				}
-				cfg = cfg.WithLastWorkingAPIBaseURL(verifyResponse.BaseURL)
 			}
 
 			cfg.AuthToken = resolvedToken
@@ -370,4 +380,15 @@ func jsonMessage(raw []byte) any {
 		return map[string]any{"raw": string(raw)}
 	}
 	return value
+}
+
+func preferAPIBaseURL(cfg config.Config, preferred string) config.Config {
+	ordered := []string{preferred}
+	for _, baseURL := range cfg.APIBaseURLs() {
+		if baseURL != preferred {
+			ordered = append(ordered, baseURL)
+		}
+	}
+	cfg.APIBaseURL = config.JoinAPIBaseURLs(ordered)
+	return cfg
 }
