@@ -87,9 +87,17 @@ chilly auth login --local-browser --no-browser
 				return app.writeLocalDryRunPreview("auth login", request)
 			}
 			if resolvedToken == "" {
-				loginBaseURL, err := app.firstReachableAPIBaseURL(cmd.Context(), cfg)
-				if err != nil {
-					return err
+				loginBaseURL := cfg.APIBaseURLs()[0]
+				if len(cfg.APIBaseURLs()) > 1 {
+					reachable, probeErr := app.firstReachableAPIBaseURL(cmd.Context(), cfg)
+					if probeErr != nil {
+						if cmd.Context().Err() != nil {
+							return cmd.Context().Err()
+						}
+						_, _ = fmt.Fprintf(app.stderr, "Warning: API health probes failed; continuing login with %s: %v\n", loginBaseURL, probeErr)
+					} else {
+						loginBaseURL = reachable
+					}
 				}
 				cfg = cfg.WithLastWorkingAPIBaseURL(loginBaseURL)
 				if resolvedLocalBrowser {

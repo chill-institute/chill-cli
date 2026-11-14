@@ -140,6 +140,7 @@ func (app *appContext) loadConfig() (config.Config, error) {
 	cfg = cfg.Normalized()
 	if override := strings.TrimSpace(app.opts.apiURL); override != "" {
 		cfg.APIBaseURL = override
+		cfg.LastWorkingAPIBaseURL = ""
 	}
 	normalizedAPIURL, err := normalizeAPIBaseURLList(cfg.APIBaseURL)
 	if err != nil {
@@ -231,6 +232,9 @@ func (app *appContext) callRPC(
 func (app *appContext) rpcCallContext(ctx context.Context) (context.Context, context.CancelFunc) {
 	if ctx == nil {
 		ctx = context.Background()
+	}
+	if _, ok := ctx.Deadline(); ok {
+		return context.WithCancel(ctx)
 	}
 	timeout := app.rpcTimeout
 	if timeout <= 0 {

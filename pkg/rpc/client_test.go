@@ -36,18 +36,6 @@ func (reader failingReader) Read([]byte) (int, error) {
 	return 0, reader.err
 }
 
-func TestNewClientUsesDefaultTimeoutWithoutCustomClient(t *testing.T) {
-	t.Parallel()
-
-	client := NewClient("https://api.chill.institute", nil)
-	if client.httpClient == nil {
-		t.Fatal("httpClient = nil")
-	}
-	if client.httpClient.Timeout != DefaultClientTimeout {
-		t.Fatalf("Timeout = %v, want %v", client.httpClient.Timeout, DefaultClientTimeout)
-	}
-}
-
 func TestNewClientCopiesCustomClientSettings(t *testing.T) {
 	t.Parallel()
 

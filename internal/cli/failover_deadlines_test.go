@@ -65,7 +65,7 @@ func TestCommandsReserveTimeForFailover(t *testing.T) {
 			if firstCalls.Load() != 1 {
 				t.Fatalf("first host calls = %d", firstCalls.Load())
 			}
-			if time.Since(start) >= app.rpcTimeout {
+			if !mutation && time.Since(start) >= app.rpcTimeout {
 				t.Fatal("command exhausted overall budget")
 			}
 			if mutation {
@@ -76,23 +76,6 @@ func TestCommandsReserveTimeForFailover(t *testing.T) {
 				t.Fatalf("search error = %v, second calls = %d, output = %s", err, secondCalls.Load(), app.stdout)
 			}
 		})
-	}
-}
-
-func TestLoginErrorsWhenEveryHostIsUnreachable(t *testing.T) {
-	release := make(chan struct{})
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { <-release }))
-	defer server.Close()
-	defer close(release)
-	app := failoverTestApp(t, server.URL+",http://127.0.0.1:1")
-	app.openURL = func(string) error {
-		t.Error("opened browser without a reachable host")
-		return errors.New("unexpected browser")
-	}
-	command := newAuthLoginCommand(app)
-	command.SetArgs([]string{"--local-browser"})
-	if err := command.Execute(); err == nil || !strings.Contains(err.Error(), "no reachable API host") {
-		t.Fatalf("login error = %v", err)
 	}
 }
 

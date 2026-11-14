@@ -2,8 +2,6 @@ package cli
 
 import (
 	"fmt"
-	"net"
-	"net/url"
 	"slices"
 	"strings"
 
@@ -280,42 +278,12 @@ func normalizeAPIBaseURLList(raw string) (string, error) {
 }
 
 func normalizeAPIBaseURL(raw string) (string, error) {
-	trimmed := strings.TrimSpace(raw)
-	if trimmed == "" {
+	if strings.TrimSpace(raw) == "" {
 		return "", usageError("empty_api_base_url", "api-base-url cannot be empty")
 	}
-
-	parsed, err := url.Parse(trimmed)
+	normalized, err := config.NormalizeAPIBaseURL(raw)
 	if err != nil {
-		return "", usageError("invalid_api_base_url", "parse api-base-url: %v", err)
+		return "", wrapUsageError("invalid_api_base_url", err)
 	}
-	if parsed.Scheme == "" || parsed.Host == "" {
-		return "", usageError("invalid_api_base_url", "api-base-url must include scheme and host")
-	}
-	if parsed.Scheme != "http" && parsed.Scheme != "https" {
-		return "", usageError("invalid_api_base_url", "api-base-url must start with http:// or https://")
-	}
-	if parsed.Scheme == "http" && !isLoopbackHost(parsed.Hostname()) {
-		return "", usageError("invalid_api_base_url", "api-base-url must use https except for loopback development hosts")
-	}
-	if parsed.User != nil {
-		return "", usageError("invalid_api_base_url", "api-base-url must not include user info")
-	}
-	if parsed.RawQuery != "" || parsed.Fragment != "" {
-		return "", usageError("invalid_api_base_url", "api-base-url must not include query or fragment data")
-	}
-	if strings.TrimSpace(parsed.Path) != "" && parsed.Path != "/" {
-		return "", usageError("invalid_api_base_url", "api-base-url must not include a path")
-	}
-
-	return strings.TrimRight(trimmed, "/"), nil
-}
-
-func isLoopbackHost(raw string) bool {
-	host := strings.ToLower(strings.TrimSpace(raw))
-	if host == "localhost" {
-		return true
-	}
-	ip := net.ParseIP(host)
-	return ip != nil && ip.IsLoopback()
+	return normalized, nil
 }

@@ -33,7 +33,7 @@ var validProfilePattern = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]*$`)
 
 type Config struct {
 	APIBaseURL            string `json:"api_base_url"`
-	LastWorkingAPIBaseURL string `json:"last_working_api_base_url,omitempty"`
+	LastWorkingAPIBaseURL string `json:"-"`
 	AuthToken             string `json:"auth_token,omitempty"`
 }
 
@@ -192,18 +192,76 @@ func (store Store) Load() (Config, error) {
 			return Config{}, fmt.Errorf("parse config %q: %w", store.path, err)
 		}
 	}
-	if remembered, err := os.ReadFile(store.path + ".host"); err == nil {
-		cfg.LastWorkingAPIBaseURL = strings.TrimSpace(string(remembered))
+	if remembered, err := store.rememberedHost(); err == nil && slices.Contains(cfg.ConfiguredAPIBaseURLs(), remembered) {
+		cfg.LastWorkingAPIBaseURL = remembered
 	}
 	return cfg.Normalized(), nil
 }
 
+func (store Store) rememberedHost() (string, error) {
+	content, err := os.ReadFile(store.path + ".host")
+	if errors.Is(err, os.ErrNotExist) {
+		return "", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("read remembered API host: %w", err)
+	}
+	return NormalizeAPIBaseURL(string(content))
+}
+
+func (store Store) RememberedHostWarning() error {
+	_, err := store.rememberedHost()
+	return err
+}
+
 func (store Store) RememberWorkingAPIBaseURL(baseURL string) error {
-	return (Store{path: store.path + ".host"}).write([]byte(strings.TrimSpace(baseURL) + "\n"))
+	normalized, err := NormalizeAPIBaseURL(baseURL)
+	if err != nil {
+		return err
+	}
+	cfg, err := store.Load()
+	if err != nil {
+		return err
+	}
+	if !slices.Contains(cfg.ConfiguredAPIBaseURLs(), normalized) {
+		return nil
+	}
+	return store.writeRememberedHost(normalized)
+}
+
+func (store Store) writeRememberedHost(baseURL string) error {
+	if baseURL == "" {
+		err := os.Remove(store.path + ".host")
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+		return err
+	}
+	if remembered, err := store.rememberedHost(); err == nil && remembered == baseURL {
+		return nil
+	}
+	return (Store{path: store.path + ".host"}).write([]byte(baseURL + "\n"))
 }
 
 func (store Store) Save(cfg Config) error {
 	normalized := cfg.Normalized()
+	previous, err := store.Load()
+	if err != nil {
+		return err
+	}
+	if !slices.Equal(previous.ConfiguredAPIBaseURLs(), normalized.ConfiguredAPIBaseURLs()) && previous.LastWorkingAPIBaseURL == normalized.LastWorkingAPIBaseURL {
+		normalized.LastWorkingAPIBaseURL = ""
+	}
+	remembered := normalized.LastWorkingAPIBaseURL
+	if remembered != "" {
+		remembered, err = NormalizeAPIBaseURL(remembered)
+		if err != nil {
+			return err
+		}
+		if !slices.Contains(normalized.ConfiguredAPIBaseURLs(), remembered) {
+			remembered = ""
+		}
+	}
 
 	payload, err := json.MarshalIndent(normalized, "", "  ")
 	if err != nil {
@@ -211,7 +269,10 @@ func (store Store) Save(cfg Config) error {
 	}
 	payload = append(payload, '\n')
 
-	return store.write(payload)
+	if err := store.write(payload); err != nil {
+		return err
+	}
+	return store.writeRememberedHost(remembered)
 }
 
 func (store Store) write(payload []byte) error {

@@ -165,7 +165,7 @@ func (client Client) BaseURLs() []string {
 
 func prepareHTTPClient(source *http.Client) *http.Client {
 	if source == nil {
-		source = &http.Client{Timeout: DefaultClientTimeout, Transport: defaultTransport()}
+		source = &http.Client{Transport: defaultTransport()}
 	}
 
 	client := *source
@@ -225,11 +225,18 @@ func (client Client) Call(ctx context.Context, req CallRequest) (CallResponse, e
 		return CallResponse{}, fmt.Errorf("encode request body: %w", err)
 	}
 
-	ctx, cancel := context.WithTimeout(ctx, DefaultClientTimeout)
-	defer cancel()
+	if _, ok := ctx.Deadline(); !ok {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, DefaultClientTimeout)
+		defer cancel()
+	}
 	var lastErr error
 	for index, baseURL := range client.baseURLs {
-		attemptCtx, cancelAttempt := hostAttemptContext(ctx, len(client.baseURLs)-index, DefaultClientTimeout)
+		remaining := 1
+		if req.ReadOnly {
+			remaining = len(client.baseURLs) - index
+		}
+		attemptCtx, cancelAttempt := hostAttemptContext(ctx, remaining)
 		response, reach, err := client.callHost(attemptCtx, baseURL, procedure, payload, req)
 		cancelAttempt()
 		if err == nil {
@@ -244,9 +251,11 @@ func (client Client) Call(ctx context.Context, req CallRequest) (CallResponse, e
 }
 
 func (client Client) FirstReachableBaseURL(ctx context.Context) (string, error) {
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
 	var lastErr error
 	for index, baseURL := range client.baseURLs {
-		probeCtx, cancel := hostAttemptContext(ctx, len(client.baseURLs)-index, 2*time.Second)
+		probeCtx, cancel := hostAttemptContext(ctx, len(client.baseURLs)-index)
 		err := client.checkHealth(probeCtx, baseURL)
 		cancel()
 		if err == nil {
@@ -260,11 +269,11 @@ func (client Client) FirstReachableBaseURL(ctx context.Context) (string, error) 
 	return "", fmt.Errorf("no reachable API host: %w", lastErr)
 }
 
-func hostAttemptContext(ctx context.Context, remaining int, limit time.Duration) (context.Context, context.CancelFunc) {
+func hostAttemptContext(ctx context.Context, remaining int) (context.Context, context.CancelFunc) {
 	if deadline, ok := ctx.Deadline(); ok {
-		limit = min(limit, time.Until(deadline)/time.Duration(remaining))
+		return context.WithTimeout(ctx, time.Until(deadline)/time.Duration(remaining))
 	}
-	return context.WithTimeout(ctx, limit)
+	return context.WithCancel(ctx)
 }
 
 func (client Client) checkHealth(ctx context.Context, baseURL string) error {
@@ -324,11 +333,21 @@ func (client Client) callHost(ctx context.Context, baseURL string, procedure str
 	var headersWritten atomic.Bool
 	var preSendFailure atomic.Bool
 	var connectionObtained atomic.Bool
+	var connectionStarted atomic.Bool
 	traceCtx := httptrace.WithClientTrace(ctx, &httptrace.ClientTrace{
-		WroteHeaders:     func() { headersWritten.Store(true) },
-		ConnectDone:      func(_, _ string, err error) { preSendFailure.Store(err != nil) },
-		TLSHandshakeDone: func(_ tls.ConnectionState, err error) { preSendFailure.Store(err != nil) },
-		GotConn:          func(httptrace.GotConnInfo) { connectionObtained.Store(true) },
+		GetConn:      func(string) { connectionStarted.Store(true) },
+		WroteHeaders: func() { headersWritten.Store(true) },
+		ConnectDone: func(_, _ string, err error) {
+			if err != nil {
+				preSendFailure.Store(true)
+			}
+		},
+		TLSHandshakeDone: func(_ tls.ConnectionState, err error) {
+			if err != nil {
+				preSendFailure.Store(true)
+			}
+		},
+		GotConn: func(httptrace.GotConnInfo) { connectionObtained.Store(true) },
 	})
 
 	httpRequest, err := http.NewRequestWithContext(traceCtx, http.MethodPost, endpoint, strings.NewReader(string(payload)))
@@ -348,7 +367,9 @@ func (client Client) callHost(ctx context.Context, baseURL string, procedure str
 	httpResponse, err := client.httpClient.Do(httpRequest)
 	if err != nil {
 		var dnsErr *net.DNSError
-		if headersWritten.Load() || connectionObtained.Load() || (!preSendFailure.Load() && !errors.As(err, &dnsErr)) {
+		var opErr *net.OpError
+		neverSent := connectionStarted.Load() || preSendFailure.Load() || errors.As(err, &dnsErr) || (errors.As(err, &opErr) && opErr.Op == "dial")
+		if headersWritten.Load() || connectionObtained.Load() || !neverSent {
 			return CallResponse{}, requestSentWithoutAnswer, fmt.Errorf("execute request: %w", err)
 		}
 		return CallResponse{}, requestNeverSent, fmt.Errorf("execute request: %w", err)
