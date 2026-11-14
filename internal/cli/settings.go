@@ -163,7 +163,6 @@ printf '{"key":"api-base-url","value":"https://api.chill.institute"}' | chilly s
 					return app.writeLocalDryRunPreview("settings set", request)
 				}
 				cfg.APIBaseURL = nextValue
-				cfg.LastWorkingAPIBaseURL = ""
 			default:
 				return fmt.Errorf("unsupported settings key %q", key)
 			}

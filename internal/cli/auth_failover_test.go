@@ -18,11 +18,9 @@ import (
 func TestAuthLoginStartsBrowserFlowOnFirstReachableHost(t *testing.T) {
 	t.Parallel()
 
-	release := make(chan struct{})
-	hanging := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { <-release }))
-	defer hanging.Close()
-	defer close(release)
-	unreachable := hanging.URL
+	closed := httptest.NewServer(http.NotFoundHandler())
+	closed.Close()
+	unreachable := closed.URL
 
 	reachable := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		switch request.URL.Path {
@@ -68,7 +66,7 @@ func TestAuthLoginStartsBrowserFlowOnFirstReachableHost(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
 	}
-	if cfg.AuthToken != "failover-token" || cfg.LastWorkingAPIBaseURL != reachable.URL {
+	if cfg.AuthToken != "failover-token" {
 		t.Fatalf("saved config = %+v", cfg)
 	}
 }

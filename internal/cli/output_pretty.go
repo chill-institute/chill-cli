@@ -588,7 +588,6 @@ func renderDoctorPretty(value any) (string, bool, error) {
 		lines = append(lines, "")
 		lines = append(lines, bold("API"))
 		lines = appendDoctorLine(lines, "Base URL", api, "base_url")
-		lines = appendDoctorLine(lines, "Remembered Host Warning", api, "remembered_host_warning")
 	}
 
 	if auth, ok := payload["auth"].(map[string]any); ok {

@@ -140,7 +140,6 @@ func (app *appContext) loadConfig() (config.Config, error) {
 	cfg = cfg.Normalized()
 	if override := strings.TrimSpace(app.opts.apiURL); override != "" {
 		cfg.APIBaseURL = override
-		cfg.LastWorkingAPIBaseURL = ""
 	}
 	normalizedAPIURL, err := normalizeAPIBaseURLList(cfg.APIBaseURL)
 	if err != nil {
@@ -168,24 +167,11 @@ func (app *appContext) rpcClient(cfg config.Config) *rpc.Client {
 	)
 }
 
-func (app *appContext) rememberWorkingAPIBaseURL(cfg config.Config, baseURL string) {
-	if len(cfg.APIBaseURLs()) < 2 {
-		return
-	}
-	store, err := app.configStore()
-	if err != nil {
-		return
-	}
-	_ = store.RememberWorkingAPIBaseURL(baseURL)
-}
-
 func (app *appContext) firstReachableAPIBaseURL(ctx context.Context, cfg config.Config) (string, error) {
 	var reachable string
 	err := app.withProgress(func() error {
-		probeCtx, cancel := app.rpcCallContext(ctx)
-		defer cancel()
 		var err error
-		reachable, err = app.rpcClient(cfg).FirstReachableBaseURL(probeCtx)
+		reachable, err = app.rpcClient(cfg).FirstReachableBaseURL(ctx)
 		return err
 	})
 	return reachable, err
@@ -225,7 +211,6 @@ func (app *appContext) callRPC(
 	if err != nil {
 		return rpc.CallResponse{}, err
 	}
-	app.rememberWorkingAPIBaseURL(cfg, response.BaseURL)
 	return response, nil
 }
 

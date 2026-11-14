@@ -3,6 +3,7 @@ package rpc
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -142,7 +143,7 @@ func TestCallReturnsApplicationErrorsWithoutFailover(t *testing.T) {
 	}
 }
 
-func TestCallTimeoutAfterSendingReplaysOnlyReadOnlyRequests(t *testing.T) {
+func TestCallTimeoutNeverReplays(t *testing.T) {
 	t.Parallel()
 
 	release := make(chan struct{})
@@ -159,12 +160,9 @@ func TestCallTimeoutAfterSendingReplaysOnlyReadOnlyRequests(t *testing.T) {
 	}
 
 	readFallback := newCountingHost(t, respondOK)
-	response, err := callWithFailover(t, httpClient, true, hanging.server.URL, readFallback.server.URL)
-	if err != nil {
-		t.Fatalf("read-only Call() error = %v", err)
-	}
-	if response.BaseURL != readFallback.server.URL {
-		t.Fatalf("read-only BaseURL = %q", response.BaseURL)
+	_, err := callWithFailover(t, httpClient, true, hanging.server.URL, readFallback.server.URL)
+	if err == nil || readFallback.hits.Load() != 0 {
+		t.Fatalf("read-only error = %v, fallback hits = %d", err, readFallback.hits.Load())
 	}
 	if got := hanging.hits.Load(); got != 2 {
 		t.Fatalf("hanging host hits = %d, want 2", got)
@@ -199,5 +197,89 @@ func TestFirstReachableBaseURLSkipsUnavailableHosts(t *testing.T) {
 	}
 	if got != healthy.server.URL {
 		t.Fatalf("FirstReachableBaseURL() = %q, want %q", got, healthy.server.URL)
+	}
+}
+
+func TestSlowHealthyHostUsesRemainingDeadline(t *testing.T) {
+	for _, readOnly := range []bool{false, true} {
+		t.Run(fmt.Sprint(readOnly), func(t *testing.T) {
+			first := newCountingHost(t, func(w http.ResponseWriter, r *http.Request) {
+				time.Sleep(300 * time.Millisecond)
+				respondOK(w, r)
+			})
+			fallback := newCountingHost(t, respondOK)
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			defer cancel()
+			client := NewClient(first.server.URL, nil, WithFailoverBaseURLs(
+				fallback.server.URL, closedPortURL(t), closedPortURL(t), closedPortURL(t),
+			))
+			response, err := client.Call(ctx, CallRequest{Procedure: "test/Call", AuthMode: AuthNone, ReadOnly: readOnly})
+			if err != nil || response.BaseURL != first.server.URL || first.hits.Load() != 1 || fallback.hits.Load() != 0 {
+				t.Fatalf("response=%+v err=%v first=%d fallback=%d", response, err, first.hits.Load(), fallback.hits.Load())
+			}
+		})
+	}
+}
+
+func TestSuccessfulResponseBodyFailureDoesNotFailOver(t *testing.T) {
+	for _, truncated := range []bool{false, true} {
+		t.Run(fmt.Sprint(truncated), func(t *testing.T) {
+			first := newCountingHost(t, func(w http.ResponseWriter, r *http.Request) {
+				if truncated {
+					w.Header().Set("Content-Length", "100")
+				}
+				_, _ = w.Write([]byte("oversized response"))
+			})
+			fallback := newCountingHost(t, respondOK)
+			client := NewClient(first.server.URL, nil, WithFailoverBaseURLs(fallback.server.URL))
+			if !truncated {
+				client.responseBodyLimit = 4
+			}
+			_, err := client.Call(context.Background(), CallRequest{Procedure: "test/Read", AuthMode: AuthNone, ReadOnly: true})
+			if err == nil || fallback.hits.Load() != 0 {
+				t.Fatalf("error=%v fallback=%d", err, fallback.hits.Load())
+			}
+		})
+	}
+}
+
+func TestReadOnlyFailsOverOnConnectionClosedBeforeResponse(t *testing.T) {
+	first := newCountingHost(t, func(w http.ResponseWriter, r *http.Request) {
+		conn, _, err := w.(http.Hijacker).Hijack()
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		_ = conn.Close()
+	})
+	fallback := newCountingHost(t, respondOK)
+	response, err := callWithFailover(t, nil, true, first.server.URL, fallback.server.URL)
+	if err != nil || response.BaseURL != fallback.server.URL || first.hits.Load() != 1 || fallback.hits.Load() != 1 {
+		t.Fatalf("response=%+v error=%v first=%d fallback=%d", response, err, first.hits.Load(), fallback.hits.Load())
+	}
+}
+
+func TestMutationFailsOverOnTLSHandshakeFailure(t *testing.T) {
+	first := httptest.NewTLSServer(http.HandlerFunc(respondOK))
+	defer first.Close()
+	fallback := newCountingHost(t, respondOK)
+	response, err := callWithFailover(t, nil, false, first.URL, fallback.server.URL)
+	if err != nil || response.BaseURL != fallback.server.URL || fallback.hits.Load() != 1 {
+		t.Fatalf("response=%+v error=%v fallback=%d", response, err, fallback.hits.Load())
+	}
+}
+
+func TestHealthProbesHaveIndependentDeadlines(t *testing.T) {
+	first := newCountingHost(t, func(w http.ResponseWriter, r *http.Request) {
+		<-r.Context().Done()
+	})
+	second := newCountingHost(t, func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(1200 * time.Millisecond)
+		respondOK(w, r)
+	})
+	client := NewClient(first.server.URL, nil, WithFailoverBaseURLs(second.server.URL))
+	host, err := client.FirstReachableBaseURL(context.Background())
+	if err != nil || host != second.server.URL || first.hits.Load() != 1 || second.hits.Load() != 1 {
+		t.Fatalf("host=%s error=%v first=%d second=%d", host, err, first.hits.Load(), second.hits.Load())
 	}
 }

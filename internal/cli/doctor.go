@@ -73,9 +73,6 @@ func (app *appContext) buildDoctorReport(ctx context.Context, offline bool) (map
 		"base_url":  cfg.APIBaseURLs()[0],
 		"base_urls": cfg.APIBaseURLs(),
 	}
-	if warning := store.RememberedHostWarning(); warning != nil {
-		api["remembered_host_warning"] = warning.Error()
-	}
 	auth := map[string]any{
 		"configured": strings.TrimSpace(cfg.AuthToken) != "",
 	}

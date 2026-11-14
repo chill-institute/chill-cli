@@ -99,7 +99,6 @@ chilly auth login --local-browser --no-browser
 						loginBaseURL = reachable
 					}
 				}
-				cfg = cfg.WithLastWorkingAPIBaseURL(loginBaseURL)
 				if resolvedLocalBrowser {
 					resolvedToken, err = app.loginWithBrowser(context.Background(), loginBaseURL, resolvedSkipOpen)
 				} else {
@@ -127,7 +126,6 @@ chilly auth login --local-browser --no-browser
 				if err != nil {
 					return fmt.Errorf("verify auth token: %w", err)
 				}
-				cfg = cfg.WithLastWorkingAPIBaseURL(verifyResponse.BaseURL)
 			}
 
 			cfg.AuthToken = resolvedToken

@@ -2,64 +2,47 @@ package cli
 
 import (
 	"context"
-	"crypto/tls"
 	"errors"
-	"io"
 	"net/http"
-	"net/http/httptrace"
-	"strings"
+	"net/http/httptest"
+	"sync/atomic"
 	"testing"
 
 	"github.com/chill-institute/chill-cli/v2/pkg/rpc"
 )
 
-type reviewRoundTripFunc func(*http.Request) (*http.Response, error)
+func TestMutationDoesNotReplayAfterHeadersSent(t *testing.T) {
+	var firstCalls, fallbackCalls atomic.Int32
+	first := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		firstCalls.Add(1)
+		conn, _, err := w.(http.Hijacker).Hijack()
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		_ = conn.Close()
+	}))
+	defer first.Close()
+	fallback := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fallbackCalls.Add(1)
+	}))
+	defer fallback.Close()
+	app := failoverTestApp(t, first.URL+","+fallback.URL)
+	command := newAddTransferCommand(app)
+	command.SetArgs([]string{"--url", "https://example.test/file.torrent"})
+	if err := command.Execute(); err == nil || firstCalls.Load() != 1 || fallbackCalls.Load() != 0 {
+		t.Fatalf("error=%v first=%d fallback=%d", err, firstCalls.Load(), fallbackCalls.Load())
+	}
+}
 
-func (f reviewRoundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
-
-func TestMutationReplayUsesConnectionEvidence(t *testing.T) {
-	for _, tc := range []struct {
-		name  string
-		trace func(*httptrace.ClientTrace)
-		retry bool
-	}{
-		{"failed then successful dial callback", func(tr *httptrace.ClientTrace) {
-			tr.ConnectDone("tcp", "", errors.New("refused"))
-			tr.ConnectDone("tcp", "", nil)
-		}, true},
-		{"successful then failed dial callback", func(tr *httptrace.ClientTrace) {
-			tr.ConnectDone("tcp", "", nil)
-			tr.ConnectDone("tcp", "", errors.New("refused"))
-		}, true},
-		{"failed TLS then successful callback", func(tr *httptrace.ClientTrace) {
-			tr.TLSHandshakeDone(tls.ConnectionState{}, errors.New("TLS failure"))
-			tr.TLSHandshakeDone(tls.ConnectionState{}, nil)
-		}, true},
-		{"waiting for connection", func(tr *httptrace.ClientTrace) { tr.GetConn("primary.example") }, true},
-		{"headers written before dial failure", func(tr *httptrace.ClientTrace) {
-			tr.WroteHeaders()
-			tr.ConnectDone("tcp", "", errors.New("refused"))
-		}, false},
-		{"connection obtained", func(tr *httptrace.ClientTrace) {
-			tr.ConnectDone("tcp", "", errors.New("refused"))
-			tr.GotConn(httptrace.GotConnInfo{})
-		}, false},
-		{"untraced ambiguous error", func(*httptrace.ClientTrace) {}, false},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			calls := 0
-			transport := reviewRoundTripFunc(func(r *http.Request) (*http.Response, error) {
-				calls++
-				if calls == 1 {
-					tc.trace(httptrace.ContextClientTrace(r.Context()))
-					return nil, errors.New("transport failed")
-				}
-				return &http.Response{StatusCode: 200, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(`{}`))}, nil
-			})
-			_, err := rpc.NewClient("https://primary.example", &http.Client{Transport: transport}, rpc.WithFailoverBaseURLs("https://fallback.example")).Call(context.Background(), rpc.CallRequest{Procedure: "test/Mutate", AuthMode: rpc.AuthNone})
-			if tc.retry && (err != nil || calls != 2) || !tc.retry && (err == nil || calls != 1) {
-				t.Fatalf("calls=%d err=%v", calls, err)
-			}
-		})
+func TestMutationDoesNotReplayAmbiguousTransportFailure(t *testing.T) {
+	calls := 0
+	client := rpc.NewClient("https://first.example", &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+		calls++
+		return nil, errors.New("transport failed")
+	})}, rpc.WithFailoverBaseURLs("https://second.example"))
+	_, err := client.Call(context.Background(), rpc.CallRequest{Procedure: "test/Mutate", AuthMode: rpc.AuthNone})
+	if err == nil || calls != 1 {
+		t.Fatalf("error=%v calls=%d", err, calls)
 	}
 }

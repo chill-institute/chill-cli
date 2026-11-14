@@ -6,7 +6,6 @@ package rpc
 import (
 	"context"
 	"crypto/rand"
-	"crypto/tls"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -231,19 +230,13 @@ func (client Client) Call(ctx context.Context, req CallRequest) (CallResponse, e
 		defer cancel()
 	}
 	var lastErr error
-	for index, baseURL := range client.baseURLs {
-		remaining := 1
-		if req.ReadOnly {
-			remaining = len(client.baseURLs) - index
-		}
-		attemptCtx, cancelAttempt := hostAttemptContext(ctx, remaining)
-		response, reach, err := client.callHost(attemptCtx, baseURL, procedure, payload, req)
-		cancelAttempt()
+	for _, baseURL := range client.baseURLs {
+		response, reach, err := client.callHost(ctx, baseURL, procedure, payload, req)
 		if err == nil {
 			return response, nil
 		}
 		lastErr = err
-		if ctx.Err() != nil || !reach.allowsRepeatOnAnotherHost(req.ReadOnly) {
+		if ctx.Err() != nil || isTimeoutOrCancellation(err) || !reach.allowsRepeatOnAnotherHost(req.ReadOnly) {
 			return CallResponse{}, err
 		}
 	}
@@ -251,11 +244,9 @@ func (client Client) Call(ctx context.Context, req CallRequest) (CallResponse, e
 }
 
 func (client Client) FirstReachableBaseURL(ctx context.Context) (string, error) {
-	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
-	defer cancel()
 	var lastErr error
-	for index, baseURL := range client.baseURLs {
-		probeCtx, cancel := hostAttemptContext(ctx, len(client.baseURLs)-index)
+	for _, baseURL := range client.baseURLs {
+		probeCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
 		err := client.checkHealth(probeCtx, baseURL)
 		cancel()
 		if err == nil {
@@ -269,11 +260,10 @@ func (client Client) FirstReachableBaseURL(ctx context.Context) (string, error) 
 	return "", fmt.Errorf("no reachable API host: %w", lastErr)
 }
 
-func hostAttemptContext(ctx context.Context, remaining int) (context.Context, context.CancelFunc) {
-	if deadline, ok := ctx.Deadline(); ok {
-		return context.WithTimeout(ctx, time.Until(deadline)/time.Duration(remaining))
-	}
-	return context.WithCancel(ctx)
+func isTimeoutOrCancellation(err error) bool {
+	var netErr net.Error
+	return errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) ||
+		(errors.As(err, &netErr) && netErr.Timeout())
 }
 
 func (client Client) checkHealth(ctx context.Context, baseURL string) error {
@@ -331,23 +321,12 @@ func (client Client) callHost(ctx context.Context, baseURL string, procedure str
 	}
 
 	var headersWritten atomic.Bool
-	var preSendFailure atomic.Bool
 	var connectionObtained atomic.Bool
 	var connectionStarted atomic.Bool
 	traceCtx := httptrace.WithClientTrace(ctx, &httptrace.ClientTrace{
 		GetConn:      func(string) { connectionStarted.Store(true) },
 		WroteHeaders: func() { headersWritten.Store(true) },
-		ConnectDone: func(_, _ string, err error) {
-			if err != nil {
-				preSendFailure.Store(true)
-			}
-		},
-		TLSHandshakeDone: func(_ tls.ConnectionState, err error) {
-			if err != nil {
-				preSendFailure.Store(true)
-			}
-		},
-		GotConn: func(httptrace.GotConnInfo) { connectionObtained.Store(true) },
+		GotConn:      func(httptrace.GotConnInfo) { connectionObtained.Store(true) },
 	})
 
 	httpRequest, err := http.NewRequestWithContext(traceCtx, http.MethodPost, endpoint, strings.NewReader(string(payload)))
@@ -366,13 +345,16 @@ func (client Client) callHost(ctx context.Context, baseURL string, procedure str
 
 	httpResponse, err := client.httpClient.Do(httpRequest)
 	if err != nil {
-		var dnsErr *net.DNSError
-		var opErr *net.OpError
-		neverSent := connectionStarted.Load() || preSendFailure.Load() || errors.As(err, &dnsErr) || (errors.As(err, &opErr) && opErr.Op == "dial")
-		if headersWritten.Load() || connectionObtained.Load() || !neverSent {
-			return CallResponse{}, requestSentWithoutAnswer, fmt.Errorf("execute request: %w", err)
+		reach := hostAnswered
+		var connectionErr *net.OpError
+		if httpResponse == nil {
+			if connectionStarted.Load() && !headersWritten.Load() && !connectionObtained.Load() {
+				reach = requestNeverSent
+			} else if errors.As(err, &connectionErr) || errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
+				reach = requestSentWithoutAnswer
+			}
 		}
-		return CallResponse{}, requestNeverSent, fmt.Errorf("execute request: %w", err)
+		return CallResponse{}, reach, fmt.Errorf("execute request: %w", err)
 	}
 	defer func() {
 		_ = httpResponse.Body.Close()
@@ -397,7 +379,7 @@ func (client Client) callHost(ctx context.Context, baseURL string, procedure str
 				Err:        fmt.Errorf("read error response: %w", err),
 			}
 		}
-		return CallResponse{}, requestSentWithoutAnswer, fmt.Errorf("read response: %w", err)
+		return CallResponse{}, hostAnswered, fmt.Errorf("read response: %w", err)
 	}
 	callResponse.Body = responseBody
 
