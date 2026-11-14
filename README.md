@@ -1,6 +1,6 @@
 # chill-cli
 
-![chill.institute cli](https://chill.institute/banner.png)
+![chill.institute cli](https://raw.githubusercontent.com/chill-institute/.github/main/assets/banner.png)
 
 `chilly` is the terminal client for [chill.institute](https://chill.institute):
 readable output for humans, stable JSON or NDJSON for scripts and agents.
