@@ -11,23 +11,28 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"net/http/httptrace"
 	"net/url"
+	"slices"
 	"strings"
+	"sync/atomic"
 	"time"
 	"unicode"
 )
 
 const (
-	AuthNone             AuthMode = "none"
-	AuthUser             AuthMode = "user"
-	DefaultClientTimeout          = 20 * time.Second
-	maxResponseBodyBytes          = 32 << 20
-	maxErrorBodyBytes             = 64 << 10
-	clientNameHeader              = "X-Chill-Client"
-	clientVersionHeader           = "X-Chill-Client-Version"
-	defaultClientName             = "cli"
-	defaultClientVersion          = "dev"
+	AuthNone              AuthMode = "none"
+	AuthUser              AuthMode = "user"
+	DefaultClientTimeout           = 20 * time.Second
+	defaultConnectTimeout          = 5 * time.Second
+	maxResponseBodyBytes           = 32 << 20
+	maxErrorBodyBytes              = 64 << 10
+	clientNameHeader               = "X-Chill-Client"
+	clientVersionHeader            = "X-Chill-Client-Version"
+	defaultClientName              = "cli"
+	defaultClientVersion           = "dev"
 )
 
 var errResponseBodyTooLarge = errors.New("rpc response body exceeds limit")
@@ -35,7 +40,7 @@ var errResponseBodyTooLarge = errors.New("rpc response body exceeds limit")
 type AuthMode string
 
 type Client struct {
-	baseURL           string
+	baseURLs          []string
 	httpClient        *http.Client
 	responseBodyLimit int64
 	errorBodyLimit    int64
@@ -45,6 +50,18 @@ type Client struct {
 
 // Option customizes a Client. Options apply in order.
 type Option func(*Client)
+
+func WithFailoverBaseURLs(baseURLs ...string) Option {
+	return func(client *Client) {
+		for _, baseURL := range baseURLs {
+			trimmed := trimBaseURL(baseURL)
+			if trimmed == "" || slices.Contains(client.baseURLs, trimmed) {
+				continue
+			}
+			client.baseURLs = append(client.baseURLs, trimmed)
+		}
+	}
+}
 
 // WithClientName sets the X-Chill-Client header and request ID prefix.
 // Empty or non-token values are ignored.
@@ -74,9 +91,11 @@ type CallRequest struct {
 	Body      any
 	AuthMode  AuthMode
 	AuthToken string
+	ReadOnly  bool
 }
 
 type CallResponse struct {
+	BaseURL    string
 	StatusCode int
 	RequestID  string
 	Body       json.RawMessage
@@ -114,13 +133,13 @@ func (err APIError) Unwrap() error {
 // NewClient returns a client for the hosted v4 API. An empty baseURL selects
 // production. Without options the client identifies as "cli" version "dev".
 func NewClient(baseURL string, httpClient *http.Client, opts ...Option) *Client {
-	trimmedBaseURL := strings.TrimRight(strings.TrimSpace(baseURL), "/")
+	trimmedBaseURL := trimBaseURL(baseURL)
 	if trimmedBaseURL == "" {
 		trimmedBaseURL = "https://api.chill.institute"
 	}
 
 	client := &Client{
-		baseURL:           trimmedBaseURL,
+		baseURLs:          []string{trimmedBaseURL},
 		httpClient:        prepareHTTPClient(httpClient),
 		responseBodyLimit: maxResponseBodyBytes,
 		errorBodyLimit:    maxErrorBodyBytes,
@@ -135,9 +154,17 @@ func NewClient(baseURL string, httpClient *http.Client, opts ...Option) *Client 
 	return client
 }
 
+func trimBaseURL(baseURL string) string {
+	return strings.TrimRight(strings.TrimSpace(baseURL), "/")
+}
+
+func (client Client) BaseURLs() []string {
+	return append([]string(nil), client.baseURLs...)
+}
+
 func prepareHTTPClient(source *http.Client) *http.Client {
 	if source == nil {
-		source = &http.Client{Timeout: DefaultClientTimeout}
+		source = &http.Client{Timeout: DefaultClientTimeout, Transport: defaultTransport()}
 	}
 
 	client := *source
@@ -155,6 +182,13 @@ func prepareHTTPClient(source *http.Client) *http.Client {
 		return nil
 	}
 	return &client
+}
+
+func defaultTransport() http.RoundTripper {
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.DialContext = (&net.Dialer{Timeout: defaultConnectTimeout, KeepAlive: 30 * time.Second}).DialContext
+	transport.TLSHandshakeTimeout = defaultConnectTimeout
+	return transport
 }
 
 func sameOrigin(initial *url.URL, destination *url.URL) bool {
@@ -185,19 +219,102 @@ func (client Client) Call(ctx context.Context, req CallRequest) (CallResponse, e
 		return CallResponse{}, err
 	}
 
-	endpoint, err := url.JoinPath(client.baseURL, "v4", procedure)
-	if err != nil {
-		return CallResponse{}, fmt.Errorf("build endpoint: %w", err)
-	}
-
 	payload, err := json.Marshal(defaultBody(req.Body))
 	if err != nil {
 		return CallResponse{}, fmt.Errorf("encode request body: %w", err)
 	}
 
-	httpRequest, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, strings.NewReader(string(payload)))
+	var lastErr error
+	for _, baseURL := range client.baseURLs {
+		response, reach, err := client.callHost(ctx, baseURL, procedure, payload, req)
+		if err == nil {
+			return response, nil
+		}
+		lastErr = err
+		if ctx.Err() != nil || !reach.allowsRepeatOnAnotherHost(req.ReadOnly) {
+			return CallResponse{}, err
+		}
+	}
+	return CallResponse{}, lastErr
+}
+
+func (client Client) FirstReachableBaseURL(ctx context.Context) (string, error) {
+	var lastErr error
+	for _, baseURL := range client.baseURLs {
+		err := client.checkHealth(ctx, baseURL)
+		if err == nil {
+			return baseURL, nil
+		}
+		lastErr = err
+		if ctx.Err() != nil {
+			break
+		}
+	}
+	return "", fmt.Errorf("no reachable API host: %w", lastErr)
+}
+
+func (client Client) checkHealth(ctx context.Context, baseURL string) error {
+	endpoint, err := url.JoinPath(baseURL, "healthz")
 	if err != nil {
-		return CallResponse{}, fmt.Errorf("build request: %w", err)
+		return fmt.Errorf("build health endpoint: %w", err)
+	}
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return fmt.Errorf("build health request: %w", err)
+	}
+	request.Header.Set(clientNameHeader, client.clientName)
+	request.Header.Set(clientVersionHeader, client.clientVersion)
+	response, err := client.httpClient.Do(request)
+	if err != nil {
+		return fmt.Errorf("check %s: %w", baseURL, err)
+	}
+	_ = response.Body.Close()
+	if response.StatusCode < 200 || response.StatusCode >= 300 {
+		return fmt.Errorf("check %s: status %d", baseURL, response.StatusCode)
+	}
+	return nil
+}
+
+type hostReach int
+
+const (
+	hostAnswered hostReach = iota
+	requestNeverSent
+	requestSentWithoutAnswer
+	gatewayUnavailable
+)
+
+func (reach hostReach) allowsRepeatOnAnotherHost(readOnly bool) bool {
+	switch reach {
+	case requestNeverSent:
+		return true
+	case requestSentWithoutAnswer, gatewayUnavailable:
+		return readOnly
+	default:
+		return false
+	}
+}
+
+func isGatewayUnavailable(statusCode int) bool {
+	return statusCode == http.StatusBadGateway ||
+		statusCode == http.StatusServiceUnavailable ||
+		statusCode == http.StatusGatewayTimeout
+}
+
+func (client Client) callHost(ctx context.Context, baseURL string, procedure string, payload []byte, req CallRequest) (CallResponse, hostReach, error) {
+	endpoint, err := url.JoinPath(baseURL, "v4", procedure)
+	if err != nil {
+		return CallResponse{}, hostAnswered, fmt.Errorf("build endpoint: %w", err)
+	}
+
+	var headersWritten atomic.Bool
+	traceCtx := httptrace.WithClientTrace(ctx, &httptrace.ClientTrace{
+		WroteHeaders: func() { headersWritten.Store(true) },
+	})
+
+	httpRequest, err := http.NewRequestWithContext(traceCtx, http.MethodPost, endpoint, strings.NewReader(string(payload)))
+	if err != nil {
+		return CallResponse{}, hostAnswered, fmt.Errorf("build request: %w", err)
 	}
 	httpRequest.Header.Set("Content-Type", "application/json")
 	httpRequest.Header.Set("Accept", "application/json")
@@ -206,40 +323,48 @@ func (client Client) Call(ctx context.Context, req CallRequest) (CallResponse, e
 	httpRequest.Header.Set(clientVersionHeader, client.clientVersion)
 
 	if err := applyAuth(httpRequest, req.AuthMode, req.AuthToken); err != nil {
-		return CallResponse{}, err
+		return CallResponse{}, hostAnswered, err
 	}
 
 	httpResponse, err := client.httpClient.Do(httpRequest)
 	if err != nil {
-		return CallResponse{}, fmt.Errorf("execute request: %w", err)
+		if headersWritten.Load() {
+			return CallResponse{}, requestSentWithoutAnswer, fmt.Errorf("execute request: %w", err)
+		}
+		return CallResponse{}, requestNeverSent, fmt.Errorf("execute request: %w", err)
 	}
 	defer func() {
 		_ = httpResponse.Body.Close()
 	}()
 
 	callResponse := CallResponse{
+		BaseURL:    baseURL,
 		StatusCode: httpResponse.StatusCode,
 		RequestID:  strings.TrimSpace(httpResponse.Header.Get("X-Request-Id")),
+	}
+	reach := hostAnswered
+	if isGatewayUnavailable(callResponse.StatusCode) {
+		reach = gatewayUnavailable
 	}
 
 	responseBody, err := readResponseBody(httpResponse.Body, client.bodyLimit(callResponse.StatusCode))
 	if err != nil {
 		if callResponse.StatusCode < 200 || callResponse.StatusCode >= 300 {
-			return CallResponse{}, APIError{
+			return CallResponse{}, reach, APIError{
 				StatusCode: callResponse.StatusCode,
 				RequestID:  callResponse.RequestID,
 				Err:        fmt.Errorf("read error response: %w", err),
 			}
 		}
-		return CallResponse{}, fmt.Errorf("read response: %w", err)
+		return CallResponse{}, hostAnswered, fmt.Errorf("read response: %w", err)
 	}
 	callResponse.Body = responseBody
 
 	if httpResponse.StatusCode < 200 || httpResponse.StatusCode >= 300 {
-		return CallResponse{}, parseAPIError(callResponse)
+		return CallResponse{}, reach, parseAPIError(callResponse)
 	}
 
-	return callResponse, nil
+	return callResponse, hostAnswered, nil
 }
 
 func (client Client) bodyLimit(statusCode int) int64 {

@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 )
 
@@ -17,6 +18,8 @@ const (
 	profilesDirName = "profiles"
 	configFileName  = "config.json"
 	defaultAPIBase  = "https://api.chill.institute"
+	fallbackAPIBase = "https://api.binge.institute"
+	apiBaseURLSep   = ","
 	defaultProfile  = "default"
 	devProfile      = "dev"
 	envProfile      = "CHILLY_PROFILE"
@@ -29,8 +32,9 @@ var userConfigDir = os.UserConfigDir
 var validProfilePattern = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]*$`)
 
 type Config struct {
-	APIBaseURL string `json:"api_base_url"`
-	AuthToken  string `json:"auth_token,omitempty"`
+	APIBaseURL            string `json:"api_base_url"`
+	LastWorkingAPIBaseURL string `json:"last_working_api_base_url,omitempty"`
+	AuthToken             string `json:"auth_token,omitempty"`
 }
 
 func DefaultPath(profile string) (string, error) {
@@ -90,9 +94,66 @@ func Default() Config {
 	return Config{APIBaseURL: defaultAPIBase}
 }
 
+func OfficialAPIBaseURLs() []string {
+	return []string{defaultAPIBase, fallbackAPIBase}
+}
+
+func SplitAPIBaseURLs(raw string) []string {
+	baseURLs := make([]string, 0)
+	for _, part := range strings.Split(raw, apiBaseURLSep) {
+		trimmed := strings.TrimRight(strings.TrimSpace(part), "/")
+		if trimmed == "" || slices.Contains(baseURLs, trimmed) {
+			continue
+		}
+		baseURLs = append(baseURLs, trimmed)
+	}
+	return baseURLs
+}
+
+func JoinAPIBaseURLs(baseURLs []string) string {
+	return strings.Join(baseURLs, apiBaseURLSep)
+}
+
+func (cfg Config) ConfiguredAPIBaseURLs() []string {
+	baseURLs := SplitAPIBaseURLs(cfg.APIBaseURL)
+	if len(baseURLs) == 0 || (len(baseURLs) == 1 && baseURLs[0] == defaultAPIBase) {
+		return OfficialAPIBaseURLs()
+	}
+	return baseURLs
+}
+
+func (cfg Config) APIBaseURLs() []string {
+	configured := cfg.ConfiguredAPIBaseURLs()
+	lastWorking := strings.TrimRight(strings.TrimSpace(cfg.LastWorkingAPIBaseURL), "/")
+	if !slices.Contains(configured, lastWorking) {
+		return configured
+	}
+	ordered := []string{lastWorking}
+	for _, baseURL := range configured {
+		if baseURL != lastWorking {
+			ordered = append(ordered, baseURL)
+		}
+	}
+	return ordered
+}
+
+func (cfg Config) WithLastWorkingAPIBaseURL(baseURL string) Config {
+	configured := cfg.ConfiguredAPIBaseURLs()
+	if !slices.Contains(configured, baseURL) {
+		return cfg
+	}
+	updated := cfg
+	updated.LastWorkingAPIBaseURL = baseURL
+	if configured[0] == baseURL {
+		updated.LastWorkingAPIBaseURL = ""
+	}
+	return updated
+}
+
 func (cfg Config) Normalized() Config {
 	normalized := cfg
 	normalized.APIBaseURL = strings.TrimSpace(normalized.APIBaseURL)
+	normalized.LastWorkingAPIBaseURL = strings.TrimSpace(normalized.LastWorkingAPIBaseURL)
 	normalized.AuthToken = strings.TrimSpace(normalized.AuthToken)
 	if normalized.APIBaseURL == "" {
 		normalized.APIBaseURL = defaultAPIBase

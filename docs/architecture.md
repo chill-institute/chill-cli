@@ -9,7 +9,8 @@ Sibling Go clients import `github.com/chill-institute/chill-cli/v2/pkg/...`;
 ## Local State
 
 Use `chilly settings path` to locate a profile and `chilly settings show` to
-inspect its selected host. Profile resolution lives in
+inspect its candidate hosts (`api_base_urls`, in try order). Profile resolution
+and host order live in
 [pkg/config/store.go](../pkg/config/store.go); file modes and atomic writes
 are in [Security](../SECURITY.md#boundaries).
 

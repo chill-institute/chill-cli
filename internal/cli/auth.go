@@ -9,7 +9,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/chill-institute/chill-cli/v2/pkg/config"
 	"github.com/chill-institute/chill-cli/v2/pkg/rpc"
 	"github.com/spf13/cobra"
 )
@@ -68,7 +67,7 @@ chilly auth login --local-browser --no-browser
 			}
 			if dryRun {
 				request := map[string]any{
-					"api_base_url": cfg.APIBaseURL,
+					"api_base_url": cfg.APIBaseURLs()[0],
 					"skip_verify":  resolvedSkipVerify,
 					"no_browser":   resolvedSkipOpen,
 				}
@@ -78,7 +77,7 @@ chilly auth login --local-browser --no-browser
 				} else if resolvedLocalBrowser {
 					request["mode"] = "local_browser"
 				} else {
-					loginURL, err := webAuthTokenURL(cfg.APIBaseURL)
+					loginURL, err := webAuthTokenURL(cfg.APIBaseURLs()[0])
 					if err != nil {
 						return err
 					}
@@ -88,10 +87,12 @@ chilly auth login --local-browser --no-browser
 				return app.writeLocalDryRunPreview("auth login", request)
 			}
 			if resolvedToken == "" {
+				loginBaseURL := app.firstReachableAPIBaseURL(context.Background(), cfg)
+				cfg = cfg.WithLastWorkingAPIBaseURL(loginBaseURL)
 				if resolvedLocalBrowser {
-					resolvedToken, err = app.loginWithBrowser(context.Background(), cfg, resolvedSkipOpen)
+					resolvedToken, err = app.loginWithBrowser(context.Background(), loginBaseURL, resolvedSkipOpen)
 				} else {
-					resolvedToken, err = app.loginWithWebToken(cfg, resolvedSkipOpen)
+					resolvedToken, err = app.loginWithWebToken(loginBaseURL, resolvedSkipOpen)
 				}
 				if err != nil {
 					return err
@@ -115,6 +116,7 @@ chilly auth login --local-browser --no-browser
 				if err != nil {
 					return fmt.Errorf("verify auth token: %w", err)
 				}
+				cfg = cfg.WithLastWorkingAPIBaseURL(verifyResponse.BaseURL)
 			}
 
 			cfg.AuthToken = resolvedToken
@@ -198,8 +200,8 @@ func resolveAuthLoginInput(app *appContext, token string, rawRequest string, ski
 	return resolvedToken, resolvedSkipOpen, resolvedLocalBrowser, resolvedSkipVerify, nil
 }
 
-func (app *appContext) loginWithBrowser(ctx context.Context, cfg config.Config, skipOpen bool) (string, error) {
-	flow, err := newLoopbackAuthFlow(cfg.APIBaseURL)
+func (app *appContext) loginWithBrowser(ctx context.Context, apiBaseURL string, skipOpen bool) (string, error) {
+	flow, err := newLoopbackAuthFlow(apiBaseURL)
 	if err != nil {
 		return "", err
 	}
@@ -241,8 +243,8 @@ func (app *appContext) loginWithBrowser(ctx context.Context, cfg config.Config, 
 	return strings.TrimSpace(token), nil
 }
 
-func (app *appContext) loginWithWebToken(cfg config.Config, skipOpen bool) (string, error) {
-	loginURL, err := webAuthTokenURL(cfg.APIBaseURL)
+func (app *appContext) loginWithWebToken(apiBaseURL string, skipOpen bool) (string, error) {
+	loginURL, err := webAuthTokenURL(apiBaseURL)
 	if err != nil {
 		return "", err
 	}

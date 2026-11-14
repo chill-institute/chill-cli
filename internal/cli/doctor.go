@@ -69,6 +69,10 @@ func (app *appContext) buildDoctorReport(ctx context.Context, offline bool) (map
 	}
 
 	info := currentBuildInfo()
+	api := map[string]any{
+		"base_url":  cfg.APIBaseURLs()[0],
+		"base_urls": cfg.APIBaseURLs(),
+	}
 	auth := map[string]any{
 		"configured": strings.TrimSpace(cfg.AuthToken) != "",
 	}
@@ -77,7 +81,10 @@ func (app *appContext) buildDoctorReport(ctx context.Context, offline bool) (map
 	} else if offline {
 		auth["status"] = "skipped"
 	} else {
-		status, details := app.verifyDoctorAuth(ctx, cfg)
+		status, details, answeringBaseURL := app.verifyDoctorAuth(ctx, cfg)
+		if answeringBaseURL != "" {
+			api["base_url"] = answeringBaseURL
+		}
 		auth["status"] = status
 		for key, value := range details {
 			auth[key] = value
@@ -98,18 +105,16 @@ func (app *appContext) buildDoctorReport(ctx context.Context, offline bool) (map
 			"path":    configPath,
 			"exists":  configExists,
 		},
-		"api": map[string]any{
-			"base_url": cfg.APIBaseURL,
-		},
+		"api":  api,
 		"auth": auth,
 	}
 	return report, nil
 }
 
-func (app *appContext) verifyDoctorAuth(ctx context.Context, cfg config.Config) (string, map[string]any) {
+func (app *appContext) verifyDoctorAuth(ctx context.Context, cfg config.Config) (string, map[string]any, string) {
 	token, err := app.userToken(cfg)
 	if err != nil {
-		return "missing", map[string]any{}
+		return "missing", map[string]any{}, ""
 	}
 
 	response, err := app.callRPC(ctx, cfg, procedureUserGetUserProfile, map[string]any{}, rpc.AuthUser, token)
@@ -127,9 +132,9 @@ func (app *appContext) verifyDoctorAuth(ctx context.Context, cfg config.Config) 
 			details["status_code"] = classified.StatusCode
 		}
 		if classified.Kind == errorKindAuth {
-			return "invalid", details
+			return "invalid", details, ""
 		}
-		return "error", details
+		return "error", details, ""
 	}
 
 	payload := map[string]any{
@@ -147,7 +152,7 @@ func (app *appContext) verifyDoctorAuth(ctx context.Context, cfg config.Config) 
 			payload["user"] = user
 		}
 	}
-	return "ok", payload
+	return "ok", payload, response.BaseURL
 }
 
 func doctorOverallStatus(auth map[string]any) string {

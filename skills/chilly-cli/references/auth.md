@@ -14,10 +14,18 @@ accepted only for loopback development.
 - Localhost callback: `chilly auth login --local-browser`, add `--no-browser` to skip auto-open
 - Logout: `chilly auth logout --output json`, previewable with `--dry-run`
 - Confirm the token works: `chilly whoami --output json`
-- Auth and host together: `chilly doctor --fields auth.status,config.api_base_url,config.profile --output json`
+- Auth and host together: `chilly doctor --fields auth.status,api.base_url,config.profile --output json`
 
 ## Host and Profile
 
 - Config path: `chilly settings path --fields path --output json`
-- Profile and host: `chilly settings show --fields profile,api_base_url --output json`
+- Profile and host: `chilly settings show --fields profile,api_base_url,api_base_urls --output json`
+- Without a custom host, requests try `https://api.chill.institute`, then
+  `https://api.binge.institute`, starting with the last host that answered.
+- A custom `api-base-url` (setting or `--api-url`) is used alone. A
+  comma-separated list fails over in the listed order.
+- Failover happens only when a host is unreachable or answers 502, 503, or
+  504. Mutations such as `add-transfer` move to the next host only when the
+  request never reached the previous one.
+- `auth login` starts on the first host whose `/healthz` answers.
 - Isolated profile path: `chilly settings path --profile dev --output json`

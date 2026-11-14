@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/chill-institute/chill-cli/v2/internal/buildinfo"
+	"github.com/chill-institute/chill-cli/v2/pkg/chill"
 	"github.com/chill-institute/chill-cli/v2/pkg/config"
 	"github.com/chill-institute/chill-cli/v2/pkg/rpc"
 	"golang.org/x/term"
@@ -140,7 +141,7 @@ func (app *appContext) loadConfig() (config.Config, error) {
 	if override := strings.TrimSpace(app.opts.apiURL); override != "" {
 		cfg.APIBaseURL = override
 	}
-	normalizedAPIURL, err := normalizeAPIBaseURL(cfg.APIBaseURL)
+	normalizedAPIURL, err := normalizeAPIBaseURLList(cfg.APIBaseURL)
 	if err != nil {
 		return config.Config{}, err
 	}
@@ -157,7 +158,51 @@ func (app *appContext) saveConfig(cfg config.Config) error {
 }
 
 func (app *appContext) rpcClient(cfg config.Config) *rpc.Client {
-	return rpc.NewClient(cfg.APIBaseURL, nil, rpc.WithClientVersion(buildinfo.Current().Version))
+	baseURLs := cfg.APIBaseURLs()
+	return rpc.NewClient(
+		baseURLs[0],
+		nil,
+		rpc.WithFailoverBaseURLs(baseURLs[1:]...),
+		rpc.WithClientVersion(buildinfo.Current().Version),
+	)
+}
+
+func (app *appContext) rememberWorkingAPIBaseURL(cfg config.Config, baseURL string) {
+	if len(cfg.APIBaseURLs()) < 2 {
+		return
+	}
+	store, err := app.configStore()
+	if err != nil {
+		return
+	}
+	stored, err := store.Load()
+	if err != nil {
+		return
+	}
+	updated := stored.WithLastWorkingAPIBaseURL(baseURL)
+	if updated.LastWorkingAPIBaseURL == stored.LastWorkingAPIBaseURL {
+		return
+	}
+	_ = store.Save(updated)
+}
+
+func (app *appContext) firstReachableAPIBaseURL(ctx context.Context, cfg config.Config) string {
+	baseURLs := cfg.APIBaseURLs()
+	if len(baseURLs) < 2 {
+		return baseURLs[0]
+	}
+	var reachable string
+	_ = app.withProgress(func() error {
+		probeCtx, cancel := app.rpcCallContext(ctx)
+		defer cancel()
+		var err error
+		reachable, err = app.rpcClient(cfg).FirstReachableBaseURL(probeCtx)
+		return err
+	})
+	if reachable == "" {
+		return baseURLs[0]
+	}
+	return reachable
 }
 
 func (app *appContext) userToken(cfg config.Config) (string, error) {
@@ -187,12 +232,14 @@ func (app *appContext) callRPC(
 			Body:      body,
 			AuthMode:  authMode,
 			AuthToken: authToken,
+			ReadOnly:  chill.IsReadOnlyProcedure(procedure),
 		})
 		return callErr
 	})
 	if err != nil {
 		return rpc.CallResponse{}, err
 	}
+	app.rememberWorkingAPIBaseURL(cfg, response.BaseURL)
 	return response, nil
 }
 
