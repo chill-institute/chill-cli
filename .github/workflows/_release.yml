@@ -148,7 +148,7 @@ jobs:
           git tag --points-at HEAD | grep -Fqx "$RELEASE_TAG"
 
       - name: Set up mise
-        uses: jdx/mise-action@b44d12e7d0d8ee7461bb893e1b1993500433185b # v5.2.7
+        uses: jdx/mise-action@d5574b52816a478f9d4e6529a3f6ff17a8a36785 # v5.2.8
         with:
           cache: false
 
@@ -169,7 +169,7 @@ jobs:
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@a4f02ab5355a589de60d917a659ce617ed19b3de # v7.3.0
         with:
-          version: v2.20.0
+          version: v2.20.2
           args: ${{ inputs.dry_run && 'release --clean --skip=publish' || 'release --clean' }}
           workdir: ${{ github.workspace }}
         env:
@@ -269,7 +269,7 @@ jobs:
           done
 
       - name: Set up mise
-        uses: jdx/mise-action@b44d12e7d0d8ee7461bb893e1b1993500433185b # v5.2.7
+        uses: jdx/mise-action@d5574b52816a478f9d4e6529a3f6ff17a8a36785 # v5.2.8
         with:
           cache: false
 
@@ -279,7 +279,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: "24.22.2"
+          node-version: "24.22.3"
           package-manager-cache: false
 
       - name: Pack npm packages
